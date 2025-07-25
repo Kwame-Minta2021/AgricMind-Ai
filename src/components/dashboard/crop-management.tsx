@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { BrainCircuit, Loader2, Sparkles, Droplet, Sprout, CheckCircle } from 'lucide-react';
+import { BrainCircuit, Loader2, Sparkles, Droplet, Sprout, CheckCircle, Shuffle } from 'lucide-react';
 import { getCropBestPractices, CropBestPracticesOutput } from '@/ai/flows/best-practices';
-import { cropRecommendation } from '@/ai/flows/crop-recommendation';
+import { cropRecommendation, CropRecommendationOutput } from '@/ai/flows/crop-recommendation';
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 
 const crops = ["Onion", "Carrot", "Potato", "Tomato", "Lettuce", "Wheat", "Corn", "Soybean"];
@@ -21,6 +22,7 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
   const [selectedCrop, setSelectedCrop] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
   const [bestPractices, setBestPractices] = useState<CropBestPracticesOutput | null>(null);
+  const [recommendation, setRecommendation] = useState<CropRecommendationOutput | null>(null);
   const { toast } = useToast();
 
   const handleGetRecommendations = async () => {
@@ -28,6 +30,7 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
 
     setIsLoading(true);
     setBestPractices(null);
+    setRecommendation(null);
 
     try {
       onNewInsight(`Fetching AI advice for ${selectedCrop}...`);
@@ -39,7 +42,8 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
       setBestPractices(practicesResult);
       onNewInsight(`Best practices for ${selectedCrop} loaded.`);
       
-      onNewInsight(`For next season, plant ${recommendationResult.recommendedCrop}. ${recommendationResult.reasoning}`);
+      setRecommendation(recommendationResult);
+      onNewInsight(`Crop rotation advice for ${selectedCrop} is ready.`);
 
     } catch (error) {
       console.error("AI Error:", error);
@@ -79,6 +83,16 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
           {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
           Get AI Advice
         </Button>
+
+        {recommendation && (
+            <Alert className="bg-primary/10 border-primary/20 animate-in fade-in-0 zoom-in-95">
+                <Shuffle className="h-5 w-5 text-primary" />
+                <AlertTitle className="text-primary font-bold">Crop Rotation Recommendation</AlertTitle>
+                <AlertDescription className="text-foreground/90">
+                    After <strong>{selectedCrop}</strong>, you should plant <strong>{recommendation.recommendedCrop}</strong>. {recommendation.reasoning}
+                </AlertDescription>
+            </Alert>
+        )}
 
         {bestPractices && (
           <div className="mt-4 p-4 bg-muted/50 rounded-lg max-h-64 overflow-y-auto space-y-4 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
