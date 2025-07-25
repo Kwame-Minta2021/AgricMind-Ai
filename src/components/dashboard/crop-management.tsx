@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { BrainCircuit, Loader2, Sparkles, Droplet, Sprout, CheckCircle, ArrowRight } from 'lucide-react';
+import { BrainCircuit, Loader2, Sparkles, Droplet, Sprout, CheckCircle, ArrowRight, CornerDownRight } from 'lucide-react';
 import { getCropBestPractices, CropBestPracticesOutput } from '@/ai/flows/best-practices';
 import { cropRecommendation, CropRecommendationOutput } from '@/ai/flows/crop-recommendation';
 import { useToast } from "@/hooks/use-toast";
@@ -43,7 +43,7 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
       onNewInsight(`Best practices for ${selectedCrop} loaded.`);
       
       setRecommendation(recommendationResult);
-      onNewInsight(`Crop rotation advice for ${selectedCrop} is ready.`);
+      onNewInsight(`4-season crop rotation plan for ${selectedCrop} is ready.`);
 
     } catch (error) {
       console.error("AI Error:", error);
@@ -86,24 +86,56 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
 
         {recommendation && (
             <Alert className="bg-primary/10 border-primary/20 animate-in fade-in-0 zoom-in-95">
-                <AlertTitle className="text-primary font-bold mb-3">Crop Rotation Recommendation</AlertTitle>
-                <AlertDescription className="text-foreground/90 space-y-2">
-                  <div className="flex items-center justify-center gap-2 md:gap-4">
-                    <div className="flex flex-col items-center gap-1 text-center">
-                      <div className="p-3 bg-secondary rounded-lg shadow">
-                        <span className="font-bold text-secondary-foreground">{selectedCrop}</span>
-                      </div>
-                       <span className="text-xs text-muted-foreground">Current Crop</span>
+                <AlertTitle className="text-primary font-bold mb-3">4-Season Crop Rotation Plan</AlertTitle>
+                <AlertDescription className="text-foreground/90 space-y-4">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="flex items-center gap-2 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="p-3 bg-secondary rounded-lg shadow">
+                            <span className="font-bold text-secondary-foreground">{selectedCrop}</span>
+                          </div>
+                           <span className="text-xs text-muted-foreground">Current Crop</span>
+                        </div>
+                        <ArrowRight className="w-5 h-5 text-primary/80 flex-shrink-0" />
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="p-3 bg-accent/80 rounded-lg shadow">
+                            <span className="font-bold text-accent-foreground">{recommendation.recommendations[0].recommendedCrop}</span>
+                          </div>
+                           <span className="text-xs text-muted-foreground">{recommendation.recommendations[0].season}</span>
+                        </div>
                     </div>
-                    <ArrowRight className="w-6 h-6 text-primary flex-shrink-0" />
-                    <div className="flex flex-col items-center gap-1 text-center">
-                      <div className="p-3 bg-accent rounded-lg shadow">
-                        <span className="font-bold text-accent-foreground">{recommendation.recommendedCrop}</span>
-                      </div>
-                      <span className="text-xs text-muted-foreground">Next Crop</span>
+                    <div className="w-full pl-12">
+                      <p className="text-xs text-left">
+                        <span className="font-semibold">Reason:</span> {recommendation.recommendations[0].reasoning}
+                      </p>
                     </div>
                   </div>
-                  <p className="text-center pt-2">{recommendation.reasoning}</p>
+
+                  <div className="pl-6 space-y-4">
+                    {recommendation.recommendations.slice(1).map((rec, index) => {
+                      const prevCrop = recommendation.recommendations[index].recommendedCrop;
+                      return (
+                        <div key={rec.season} className="flex flex-col">
+                           <div className="flex items-center gap-2">
+                              <CornerDownRight className="w-4 h-4 text-primary/70" />
+                              <div className="p-2 bg-secondary/70 text-sm rounded-md shadow-sm">
+                                  <span className="font-semibold text-secondary-foreground">{prevCrop}</span>
+                              </div>
+                               <ArrowRight className="w-4 h-4 text-primary/70" />
+                               <div className="p-2 bg-accent/70 text-sm rounded-md shadow-sm">
+                                  <span className="font-semibold text-accent-foreground">{rec.recommendedCrop}</span>
+                               </div>
+                                <span className='text-xs font-bold text-muted-foreground ml-2'>{rec.season}</span>
+                           </div>
+                           <div className="w-full pl-6 mt-1">
+                              <p className="text-xs text-left">
+                                <span className="font-semibold">Reason:</span> {rec.reasoning}
+                              </p>
+                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </AlertDescription>
             </Alert>
         )}
