@@ -106,7 +106,10 @@ export default function DashboardPage() {
               onNewInsight={handleNewInsight}
               currentSoilMoisture={sensorData.soilMoisture}
             />
-            <CropManagement onNewInsight={handleNewInsight} />
+            <CropManagement 
+              onNewInsight={handleNewInsight}
+              sensorData={sensorData}
+            />
           </div>
           <div className="mt-8 animate-in fade-in-0 slide-in-from-bottom-8 duration-900 delay-400">
             <InsightsPanel insights={insights} />

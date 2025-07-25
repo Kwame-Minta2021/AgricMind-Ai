@@ -7,18 +7,23 @@ import { Button } from '@/components/ui/button';
 import { BrainCircuit, Loader2, Sparkles, Droplet, Sprout, CheckCircle, ArrowRight, CornerDownRight } from 'lucide-react';
 import { getCropBestPractices, CropBestPracticesOutput } from '@/ai/flows/best-practices';
 import { cropRecommendation, CropRecommendationOutput } from '@/ai/flows/crop-recommendation';
+import { getEnvironmentalImpact } from '@/ai/flows/environmental-impact';
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-
 
 const crops = ["Onion", "Carrot", "Potato", "Tomato", "Lettuce", "Wheat", "Corn", "Soybean"];
 
 interface CropManagementProps {
   onNewInsight: (insight: string) => void;
+  sensorData: {
+    temperature: number;
+    humidity: number;
+    soilMoisture: number;
+  };
 }
 
-export function CropManagement({ onNewInsight }: CropManagementProps) {
+export function CropManagement({ onNewInsight, sensorData }: CropManagementProps) {
   const [selectedCrop, setSelectedCrop] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
   const [bestPractices, setBestPractices] = useState<CropBestPracticesOutput | null>(null);
@@ -34,9 +39,11 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
 
     try {
       onNewInsight(`Fetching AI advice for ${selectedCrop}...`);
-      const [practicesResult, recommendationResult] = await Promise.all([
+      
+      const [practicesResult, recommendationResult, impactResult] = await Promise.all([
         getCropBestPractices({ crop: selectedCrop }),
-        cropRecommendation({ currentCrop: selectedCrop })
+        cropRecommendation({ currentCrop: selectedCrop }),
+        getEnvironmentalImpact({ ...sensorData, crop: selectedCrop })
       ]);
       
       setBestPractices(practicesResult);
@@ -44,6 +51,8 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
       
       setRecommendation(recommendationResult);
       onNewInsight(`4-season crop rotation plan for ${selectedCrop} is ready.`);
+      
+      onNewInsight(`Environmental Analysis: ${impactResult.impactAnalysis}`);
 
     } catch (error) {
       console.error("AI Error:", error);
