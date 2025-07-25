@@ -9,7 +9,7 @@ import { getCropBestPractices } from '@/ai/flows/best-practices';
 import { cropRecommendation } from '@/ai/flows/crop-recommendation';
 import { useToast } from "@/hooks/use-toast";
 
-const crops = ["Tomato", "Cucumber", "Lettuce", "Bell Pepper", "Strawberry", "Beans", "Carrots"];
+const crops = ["Onion", "Carrot", "Potato", "Tomato", "Lettuce", "Wheat", "Corn", "Soybean"];
 
 interface CropManagementProps {
   onNewInsight: (insight: string) => void;
