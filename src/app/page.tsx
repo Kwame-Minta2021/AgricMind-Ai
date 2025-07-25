@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { getDatabase, ref, onValue } from "firebase/database";
+import { database } from '@/lib/firebase';
 import { Thermometer, Droplets, Waves, Lightbulb, CloudRain } from 'lucide-react';
 
 import { Header } from '@/components/dashboard/header';
@@ -10,46 +12,42 @@ import { CropManagement } from '@/components/dashboard/crop-management';
 import { AutomatedIrrigation } from '@/components/dashboard/automated-irrigation';
 import { InsightsPanel } from '@/components/dashboard/insights-panel';
 
-// Mock data simulating IoT device updates
-const useMockSensorData = () => {
+const useSensorData = () => {
   const [data, setData] = useState({
-    temperature: 24.5,
-    humidity: 60.2,
-    soilMoisture: 45.8,
+    temperature: 0,
+    humidity: 0,
+    soilMoisture: 0,
   });
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setData(prevData => {
-        const newTemp = Math.max(15, Math.min(35, prevData.temperature + (Math.random() - 0.5) * 0.5));
-        const newHum = Math.max(30, Math.min(90, prevData.humidity + (Math.random() - 0.5) * 2));
-        const newMoisture = Math.max(10, Math.min(80, prevData.soilMoisture + (Math.random() - 0.5) * 1));
-        return {
-          temperature: newTemp,
-          humidity: newHum,
-          soilMoisture: newMoisture,
-        }
-      });
-    }, 5000);
+    const sensorDataRef = ref(database, 'sensorData');
+    const unsubscribe = onValue(sensorDataRef, (snapshot) => {
+      const value = snapshot.val();
+      if (value) {
+        setData(value);
+      }
+    });
 
-    return () => clearInterval(interval);
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
 
   return data;
 };
 
 export default function DashboardPage() {
-  const sensorData = useMockSensorData();
+  const sensorData = useSensorData();
   const [bulbOn, setBulbOn] = useState(true);
   const [pumpOn, setPumpOn] = useState(false);
   const [insights, setInsights] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate initial loading
-    const timer = setTimeout(() => setIsLoading(false), 1500);
-    return () => clearTimeout(timer);
-  }, []);
+    const hasData = sensorData.temperature !== 0 || sensorData.humidity !== 0 || sensorData.soilMoisture !== 0;
+    if (hasData) {
+      setIsLoading(false);
+    }
+  }, [sensorData]);
 
   const handleNewInsight = (insight: string) => {
     setInsights(prev => [insight, ...prev]);
@@ -106,6 +104,7 @@ export default function DashboardPage() {
               currentPumpStatus={pumpOn}
               onPumpStatusChange={setPumpOn}
               onNewInsight={handleNewInsight}
+              currentSoilMoisture={sensorData.soilMoisture}
             />
             <CropManagement onNewInsight={handleNewInsight} />
           </div>

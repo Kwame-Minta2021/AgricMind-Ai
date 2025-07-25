@@ -13,14 +13,19 @@ interface AutomatedIrrigationProps {
   currentPumpStatus: boolean;
   onPumpStatusChange: (newStatus: boolean) => void;
   onNewInsight: (insight: string) => void;
+  currentSoilMoisture: number;
 }
 
 const OPTIMAL_MOISTURE = 60;
 
-export function AutomatedIrrigation({ currentPumpStatus, onPumpStatusChange, onNewInsight }: AutomatedIrrigationProps) {
-  const [soilMoisture, setSoilMoisture] = useState(45);
+export function AutomatedIrrigation({ currentPumpStatus, onPumpStatusChange, onNewInsight, currentSoilMoisture }: AutomatedIrrigationProps) {
+  const [soilMoisture, setSoilMoisture] = useState(currentSoilMoisture);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setSoilMoisture(currentSoilMoisture);
+  }, [currentSoilMoisture]);
   
   const handleAutomation = async () => {
     setIsLoading(true);
@@ -60,7 +65,7 @@ export function AutomatedIrrigation({ currentPumpStatus, onPumpStatusChange, onN
       <CardContent className="space-y-4">
         <div>
           <Label htmlFor="soil-moisture" className='flex justify-between mb-2'>
-            <span>Simulated Soil Moisture</span>
+            <span>Live Soil Moisture</span>
             <span className='font-bold text-primary'>{soilMoisture}%</span>
           </Label>
           <Slider
@@ -70,6 +75,7 @@ export function AutomatedIrrigation({ currentPumpStatus, onPumpStatusChange, onN
             step={1}
             value={[soilMoisture]}
             onValueChange={(value) => setSoilMoisture(value[0])}
+            disabled={true}
           />
           <div className='text-xs text-muted-foreground mt-1 text-right'>Optimal Level: {OPTIMAL_MOISTURE}%</div>
         </div>
