@@ -58,7 +58,7 @@ export default function DashboardPage() {
       <main className="flex-1 p-4 sm:p-6 lg:p-8">
         <div className="max-w-7xl mx-auto">
           <Header />
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
             <SensorCard
               title="Temperature"
               icon={Thermometer}
@@ -99,7 +99,7 @@ export default function DashboardPage() {
                 />
             </div>
           </div>
-          <div className="mt-8 grid gap-8 md:grid-cols-1 lg:grid-cols-2">
+          <div className="mt-8 grid gap-8 md:grid-cols-1 lg:grid-cols-2 animate-in fade-in-0 slide-in-from-bottom-6 duration-700 delay-200">
             <AutomatedIrrigation 
               currentPumpStatus={pumpOn}
               onPumpStatusChange={setPumpOn}
@@ -108,7 +108,7 @@ export default function DashboardPage() {
             />
             <CropManagement onNewInsight={handleNewInsight} />
           </div>
-          <div className="mt-8">
+          <div className="mt-8 animate-in fade-in-0 slide-in-from-bottom-8 duration-900 delay-400">
             <InsightsPanel insights={insights} />
           </div>
         </div>

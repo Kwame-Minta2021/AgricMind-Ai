@@ -81,7 +81,7 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
         </Button>
 
         {bestPractices && (
-          <div className="mt-4 p-4 bg-muted/50 rounded-lg max-h-64 overflow-y-auto space-y-4">
+          <div className="mt-4 p-4 bg-muted/50 rounded-lg max-h-64 overflow-y-auto space-y-4 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
             <h4 className="font-bold text-lg mb-2 text-primary/90">Best Practices for {selectedCrop}</h4>
             
             <div className="space-y-2">
