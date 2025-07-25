@@ -81,7 +81,7 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
         {bestPractices && (
           <div className="mt-4 p-4 bg-muted/50 rounded-lg max-h-48 overflow-y-auto">
             <h4 className="font-bold mb-2 text-primary/90">Best Practices for {selectedCrop}</h4>
-            <p className="text-sm whitespace-pre-wrap text-foreground/80">{bestPractices}</p>
+            <p className="text-sm text-foreground/80">{bestPractices}</p>
           </div>
         )}
       </CardContent>

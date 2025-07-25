@@ -29,7 +29,7 @@ const prompt = ai.definePrompt({
   name: 'cropBestPracticesPrompt',
   input: {schema: CropBestPracticesInputSchema},
   output: {schema: CropBestPracticesOutputSchema},
-  prompt: `You are an expert agricultural advisor. Provide the best practices for growing the following crop, including a watering schedule and notes about soil health.\n\nCrop: {{{crop}}}`,
+  prompt: `You are an expert agricultural advisor. Provide the best practices for growing the following crop, including a watering schedule and notes about soil health. Do not use any markdown formatting.\n\nCrop: {{{crop}}}`,
 });
 
 const cropBestPracticesFlow = ai.defineFlow(
