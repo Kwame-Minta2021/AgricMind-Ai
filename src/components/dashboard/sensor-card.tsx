@@ -11,6 +11,8 @@ interface SensorCardProps {
 }
 
 export function SensorCard({ title, icon: Icon, value, unit, isLoading }: SensorCardProps) {
+  const displayValue = value !== undefined ? value.toFixed(2) : '0.00';
+  
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 bg-card/80 backdrop-blur-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -22,7 +24,7 @@ export function SensorCard({ title, icon: Icon, value, unit, isLoading }: Sensor
           <Skeleton className="h-8 w-3/4" />
         ) : (
           <div className="text-2xl font-bold">
-            {value !== undefined ? `${value.toFixed(1)} ${unit}` : 'N/A'}
+            {`${displayValue} ${unit}`}
           </div>
         )}
       </CardContent>
