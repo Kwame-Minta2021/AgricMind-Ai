@@ -50,7 +50,7 @@ export default function DashboardPage() {
   }, [sensorData]);
 
   const handleNewInsight = (insight: string) => {
-    setInsights(prev => [insight, ...prev]);
+    setInsights(prev => [insight, ...prev].slice(0, 10)); // Keep last 10 insights
   };
 
   return (
@@ -99,7 +99,7 @@ export default function DashboardPage() {
                 />
             </div>
           </div>
-          <div className="mt-6 grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+          <div className="mt-8 grid gap-8 md:grid-cols-1 lg:grid-cols-2">
             <AutomatedIrrigation 
               currentPumpStatus={pumpOn}
               onPumpStatusChange={setPumpOn}
@@ -108,7 +108,7 @@ export default function DashboardPage() {
             />
             <CropManagement onNewInsight={handleNewInsight} />
           </div>
-          <div className="mt-6">
+          <div className="mt-8">
             <InsightsPanel insights={insights} />
           </div>
         </div>

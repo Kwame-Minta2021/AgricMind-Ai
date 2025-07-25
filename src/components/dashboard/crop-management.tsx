@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { BrainCircuit, Loader2, Sparkles } from 'lucide-react';
-import { getCropBestPractices } from '@/ai/flows/best-practices';
+import { BrainCircuit, Loader2, Sparkles, Droplet, Sprout, CheckCircle } from 'lucide-react';
+import { getCropBestPractices, CropBestPracticesOutput } from '@/ai/flows/best-practices';
 import { cropRecommendation } from '@/ai/flows/crop-recommendation';
 import { useToast } from "@/hooks/use-toast";
+import { Separator } from '@/components/ui/separator';
+
 
 const crops = ["Onion", "Carrot", "Potato", "Tomato", "Lettuce", "Wheat", "Corn", "Soybean"];
 
@@ -18,7 +20,7 @@ interface CropManagementProps {
 export function CropManagement({ onNewInsight }: CropManagementProps) {
   const [selectedCrop, setSelectedCrop] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
-  const [bestPractices, setBestPractices] = useState<string | null>(null);
+  const [bestPractices, setBestPractices] = useState<CropBestPracticesOutput | null>(null);
   const { toast } = useToast();
 
   const handleGetRecommendations = async () => {
@@ -34,7 +36,7 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
         cropRecommendation({ currentCrop: selectedCrop })
       ]);
       
-      setBestPractices(practicesResult.bestPractices);
+      setBestPractices(practicesResult);
       onNewInsight(`Best practices for ${selectedCrop} loaded.`);
       
       onNewInsight(`For next season, plant ${recommendationResult.recommendedCrop}. ${recommendationResult.reasoning}`);
@@ -79,9 +81,36 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
         </Button>
 
         {bestPractices && (
-          <div className="mt-4 p-4 bg-muted/50 rounded-lg max-h-48 overflow-y-auto">
-            <h4 className="font-bold mb-2 text-primary/90">Best Practices for {selectedCrop}</h4>
-            <p className="text-sm text-foreground/80">{bestPractices}</p>
+          <div className="mt-4 p-4 bg-muted/50 rounded-lg max-h-64 overflow-y-auto space-y-4">
+            <h4 className="font-bold text-lg mb-2 text-primary/90">Best Practices for {selectedCrop}</h4>
+            
+            <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                    <Droplet className="w-5 h-5 text-accent"/>
+                    <h5 className="font-semibold text-primary">Watering</h5>
+                </div>
+                <p className="text-sm text-foreground/80 pl-7">{bestPractices.watering}</p>
+            </div>
+            
+            <Separator />
+
+            <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                    <Sprout className="w-5 h-5 text-accent"/>
+                    <h5 className="font-semibold text-primary">Soil Health</h5>
+                </div>
+                <p className="text-sm text-foreground/80 pl-7">{bestPractices.soil}</p>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-accent"/>
+                    <h5 className="font-semibold text-primary">General Tips</h5>
+                </div>
+                <p className="text-sm text-foreground/80 pl-7">{bestPractices.general}</p>
+            </div>
           </div>
         )}
       </CardContent>

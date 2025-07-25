@@ -17,7 +17,9 @@ const CropBestPracticesInputSchema = z.object({
 export type CropBestPracticesInput = z.infer<typeof CropBestPracticesInputSchema>;
 
 const CropBestPracticesOutputSchema = z.object({
-  bestPractices: z.string().describe('The best practices for the given crop, including watering schedule and soil health notes.'),
+  watering: z.string().describe('Detailed watering schedule and advice.'),
+  soil: z.string().describe('Notes and recommendations for soil health.'),
+  general: z.string().describe('General best practices and tips for growing the crop.'),
 });
 export type CropBestPracticesOutput = z.infer<typeof CropBestPracticesOutputSchema>;
 
@@ -29,7 +31,11 @@ const prompt = ai.definePrompt({
   name: 'cropBestPracticesPrompt',
   input: {schema: CropBestPracticesInputSchema},
   output: {schema: CropBestPracticesOutputSchema},
-  prompt: `You are an expert agricultural advisor. Provide the best practices for growing the following crop, including a watering schedule and notes about soil health. Do not use any markdown formatting.\n\nCrop: {{{crop}}}`,
+  prompt: `You are an expert agricultural advisor. Provide the best practices for growing the following crop.
+  Structure your advice into three sections: "watering", "soil", and "general".
+  Do not use any markdown formatting. Write in clear, concise language.
+
+  Crop: {{{crop}}}`,
 });
 
 const cropBestPracticesFlow = ai.defineFlow(
