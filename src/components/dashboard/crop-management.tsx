@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { BrainCircuit, Loader2, Sparkles, Droplet, Sprout, CheckCircle, Shuffle } from 'lucide-react';
+import { BrainCircuit, Loader2, Sparkles, Droplet, Sprout, CheckCircle, ArrowRight } from 'lucide-react';
 import { getCropBestPractices, CropBestPracticesOutput } from '@/ai/flows/best-practices';
 import { cropRecommendation, CropRecommendationOutput } from '@/ai/flows/crop-recommendation';
 import { useToast } from "@/hooks/use-toast";
@@ -86,10 +86,24 @@ export function CropManagement({ onNewInsight }: CropManagementProps) {
 
         {recommendation && (
             <Alert className="bg-primary/10 border-primary/20 animate-in fade-in-0 zoom-in-95">
-                <Shuffle className="h-5 w-5 text-primary" />
-                <AlertTitle className="text-primary font-bold">Crop Rotation Recommendation</AlertTitle>
-                <AlertDescription className="text-foreground/90">
-                    After <strong>{selectedCrop}</strong>, you should plant <strong>{recommendation.recommendedCrop}</strong>. {recommendation.reasoning}
+                <AlertTitle className="text-primary font-bold mb-3">Crop Rotation Recommendation</AlertTitle>
+                <AlertDescription className="text-foreground/90 space-y-2">
+                  <div className="flex items-center justify-center gap-2 md:gap-4">
+                    <div className="flex flex-col items-center gap-1 text-center">
+                      <div className="p-3 bg-secondary rounded-lg shadow">
+                        <span className="font-bold text-secondary-foreground">{selectedCrop}</span>
+                      </div>
+                       <span className="text-xs text-muted-foreground">Current Crop</span>
+                    </div>
+                    <ArrowRight className="w-6 h-6 text-primary flex-shrink-0" />
+                    <div className="flex flex-col items-center gap-1 text-center">
+                      <div className="p-3 bg-accent rounded-lg shadow">
+                        <span className="font-bold text-accent-foreground">{recommendation.recommendedCrop}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">Next Crop</span>
+                    </div>
+                  </div>
+                  <p className="text-center pt-2">{recommendation.reasoning}</p>
                 </AlertDescription>
             </Alert>
         )}
