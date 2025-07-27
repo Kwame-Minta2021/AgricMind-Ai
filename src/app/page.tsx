@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { ref, onValue, off } from "firebase/database";
+import { ref, onValue, off, set } from "firebase/database";
 import { database } from '@/lib/firebase';
 import { Thermometer, Droplets, Waves, Lightbulb, CloudRain, Wifi, WifiOff } from 'lucide-react';
 import { format } from 'date-fns';
