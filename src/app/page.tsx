@@ -133,7 +133,7 @@ const useFirebaseData = () => {
   return { sensors: { ...sensors, soilMoisture: soilMoisturePercent }, actuators, controls, lastUpdated, isConnected: deviceOnline, isLoading, error };
 };
 
-const StatusIndicator = ({ isConnected, isLoading, lastUpdated, error }: { isConnected: boolean, isLoading: boolean, lastUpdated: string | null, error: string | null }) => (
+const StatusIndicator = ({ isConnected, isLoading, error }: { isConnected: boolean, isLoading: boolean, error: string | null }) => (
   <div className="flex items-center gap-4 mb-6 animate-in fade-in-0 duration-300">
     <Badge variant={isConnected ? 'default' : 'destructive'} className="flex items-center gap-2 bg-primary/10 border-primary/20 text-primary">
       {isConnected ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
@@ -141,8 +141,7 @@ const StatusIndicator = ({ isConnected, isLoading, lastUpdated, error }: { isCon
     </Badge>
     <div className="text-sm text-muted-foreground">
       {isLoading ? <Skeleton className="h-4 w-48" /> : (
-        error ? <span className="text-destructive">{error}</span> :
-        lastUpdated && parseInt(lastUpdated) > 0 ? `Last Updated: ${format(new Date(parseInt(lastUpdated) * 1000), "PPP p")}` : 'Waiting for data...'
+        error ? <span className="text-destructive">{error}</span> : 'Waiting for data...'
       )}
     </div>
   </div>
@@ -150,7 +149,7 @@ const StatusIndicator = ({ isConnected, isLoading, lastUpdated, error }: { isCon
 
 
 export default function DashboardPage() {
-  const { sensors, actuators, controls, lastUpdated, isConnected, isLoading, error } = useFirebaseData();
+  const { sensors, actuators, controls, isConnected, isLoading, error } = useFirebaseData();
   const [insights, setInsights] = useState<string[]>([]);
 
   const handleNewInsight = (insight: string) => {
@@ -162,7 +161,7 @@ export default function DashboardPage() {
       <main className="flex-1 p-4 sm:p-6 lg:p-8">
         <div className="max-w-7xl mx-auto">
           <Header />
-          <StatusIndicator isConnected={isConnected} isLoading={isLoading} lastUpdated={lastUpdated} error={error} />
+          <StatusIndicator isConnected={isConnected} isLoading={isLoading} error={error} />
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
             <SensorCard
               title="Temperature"
