@@ -142,7 +142,7 @@ const StatusIndicator = ({ isConnected, isLoading, lastUpdated, error }: { isCon
     <div className="text-sm text-muted-foreground">
       {isLoading ? <Skeleton className="h-4 w-48" /> : (
         error ? <span className="text-destructive">{error}</span> :
-        lastUpdated && parseInt(lastUpdated) > 0 ? `Last Updated: ${format(new Date(parseInt(lastUpdated)), "PPP p")}` : 'Waiting for data...'
+        lastUpdated && parseInt(lastUpdated) > 0 ? `Last Updated: ${format(new Date(parseInt(lastUpdated) * 1000), "PPP p")}` : 'Waiting for data...'
       )}
     </div>
   </div>
