@@ -3,7 +3,8 @@ import type { LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { getDatabase, ref, set } from "firebase/database";
+import { database } from '@/lib/firebase';
+import { ref, set } from "firebase/database";
 
 interface DeviceControlCardProps {
   title: string;
@@ -17,9 +18,8 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, description, i
   const switchId = `switch-${title.toLowerCase().replace(/\s+/g, '-')}`;
 
   const handleCheckedChange = (checked: boolean) => {
-    const db = getDatabase();
     const actuatorPath = title === 'Grow Light' ? 'actuators/bulbStatus' : 'actuators/pumpStatus';
-    set(ref(db, actuatorPath), checked);
+    set(ref(database, actuatorPath), checked);
   };
 
   return (

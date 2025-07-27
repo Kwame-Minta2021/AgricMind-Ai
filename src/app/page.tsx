@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { getDatabase, ref, onValue, off } from "firebase/database";
+import { ref, onValue, off } from "firebase/database";
 import { database } from '@/lib/firebase';
 import { Thermometer, Droplets, Waves, Lightbulb, CloudRain, Wifi, WifiOff } from 'lucide-react';
 import { format } from 'date-fns';
@@ -36,9 +36,8 @@ const useFirebaseData = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const db = getDatabase();
-    const rootRef = ref(db);
-    const connectedRef = ref(db, '.info/connected');
+    const rootRef = ref(database);
+    const connectedRef = ref(database, '.info/connected');
 
     const onData = (snapshot: any) => {
       try {
@@ -79,13 +78,15 @@ const useFirebaseData = () => {
 
     return () => {
       off(rootRef);
-      off(connectedRef);
+      // The listener on '.info/connected' is managed by Firebase and doesn't need to be turned off manually with `off(connectedRef)`.
+      // The `onValue` for `connectedRef` returns an unsubscribe function, which we can call.
+      onConnected();
     };
   }, [error]);
 
-  const soilMoisturePercent = Math.max(0, Math.min(100, ((4095 - sensors.soilMoisture) / 4095) * 100));
+  const soilMoisturePercent = Math.max(0, Math.min(100, ((sensors.soilMoisture) / 4095) * 100));
 
-  return { sensors: { ...sensors, soilMoisture: soilMoisturePercent }, actuators, lastUpdated, isConnected, isLoading, error };
+  return { sensors: { ...sensors, soilMoisture: soilMoisturePercent, temperature: sensors.temperature, humidity: sensors.humidity }, actuators, lastUpdated, isConnected, isLoading, error };
 };
 
 const StatusIndicator = ({ isConnected, isLoading, lastUpdated, error }: { isConnected: boolean, isLoading: boolean, lastUpdated: string | null, error: string | null }) => (

@@ -9,7 +9,8 @@ import { automateIrrigation } from '@/ai/flows/automated-irrigation-control';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { getDatabase, ref, set } from "firebase/database";
+import { database } from '@/lib/firebase';
+import { ref, set } from "firebase/database";
 
 interface AutomatedIrrigationProps {
   currentPumpStatus: boolean;
@@ -33,8 +34,7 @@ export function AutomatedIrrigation({ currentPumpStatus, onNewInsight, currentSo
       });
 
       if (result.newPumpStatus !== currentPumpStatus) {
-        const db = getDatabase();
-        await set(ref(db, 'actuators/pumpStatus'), result.newPumpStatus);
+        await set(ref(database, 'actuators/pumpStatus'), result.newPumpStatus);
       }
       onNewInsight(`AI Irrigation: ${result.reason}`);
     } catch (error) {
