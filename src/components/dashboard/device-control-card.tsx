@@ -1,4 +1,7 @@
 
+"use client";
+
+import { useState, useEffect } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -16,10 +19,15 @@ interface DeviceControlCardProps {
 
 export function DeviceControlCard({ title, icon: Icon, isChecked, description, isLoading }: DeviceControlCardProps) {
   const switchId = `switch-${title.toLowerCase().replace(/\s+/g, '-')}`;
+  const [localChecked, setLocalChecked] = useState(isChecked);
+
+  useEffect(() => {
+    setLocalChecked(isChecked);
+  }, [isChecked]);
 
   const handleCheckedChange = (checked: boolean) => {
+    setLocalChecked(checked); // Optimistic UI update
     const commandPath = title === 'Grow Light' ? 'controls/manualBulbCommand' : 'controls/manualPumpCommand';
-    // Send boolean true/false for the command
     set(ref(database, commandPath), checked);
   };
 
@@ -32,12 +40,12 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, description, i
       <CardContent>
         <div className="flex items-center justify-between space-x-2">
           <Label htmlFor={switchId} className="flex flex-col space-y-1">
-            <span className="font-medium">{isChecked ? 'ON' : 'OFF'}</span>
+            <span className="font-medium">{localChecked ? 'ON' : 'OFF'}</span>
             <span className="text-xs text-muted-foreground">{description}</span>
           </Label>
           <Switch
             id={switchId}
-            checked={isChecked}
+            checked={localChecked}
             onCheckedChange={handleCheckedChange}
             disabled={isLoading}
             aria-label={`Toggle ${title}`}
