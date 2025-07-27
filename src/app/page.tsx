@@ -19,7 +19,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 interface SensorData {
   temperature: number;
   humidity: number;
-  soilMoisture: number;
+  soilMoisture: number; // raw ADC
+  soilMoisturePercent: number; // percentage
 }
 
 interface ActuatorData {
@@ -27,44 +28,62 @@ interface ActuatorData {
   bulbStatus: boolean;
 }
 
+interface SystemData {
+  deviceOnline: boolean;
+  lastUpdate: string;
+}
+
 const useFirebaseData = () => {
-  const [sensors, setSensors] = useState<SensorData>({ temperature: 0, humidity: 0, soilMoisture: 0 });
+  const [sensors, setSensors] = useState<SensorData>({ temperature: 0, humidity: 0, soilMoisture: 0, soilMoisturePercent: 0 });
   const [actuators, setActuators] = useState<ActuatorData>({ pumpStatus: false, bulbStatus: false });
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [system, setSystem] = useState<SystemData>({ deviceOnline: false, lastUpdate: '' });
   const [isConnected, setIsConnected] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const rootRef = ref(database);
+    const sensorsRef = ref(database, 'sensors');
+    const actuatorsRef = ref(database, 'actuators');
+    const systemRef = ref(database, 'system');
     const connectedRef = ref(database, '.info/connected');
 
-    const onData = (snapshot: any) => {
+    const onData = (path: string) => (snapshot: any) => {
       try {
         const value = snapshot.val();
         if (value) {
-          setSensors(value.sensors || { temperature: 0, humidity: 0, soilMoisture: 0 });
-          // Convert incoming 0/1 to boolean for UI state
-          setActuators({
-            pumpStatus: !!value.actuators?.pumpStatus,
-            bulbStatus: !!value.actuators?.bulbStatus
-          });
-          setLastUpdated(value.lastUpdated || null);
+          if (path === 'sensors') {
+            setSensors({
+              temperature: value.temperature || 0,
+              humidity: value.humidity || 0,
+              soilMoisture: value.soilMoisture || 0,
+              soilMoisturePercent: value.soilMoisturePercent || 0,
+            });
+          } else if (path === 'actuators') {
+            setActuators({
+              pumpStatus: !!value.pumpStatus,
+              bulbStatus: !!value.bulbStatus
+            });
+          } else if (path === 'system') {
+            setSystem({
+              deviceOnline: !!value.deviceOnline,
+              lastUpdate: value.lastUpdate || ''
+            });
+          }
           setError(null);
         } else {
-          setError("No data received from Firebase. Check your device and database.");
+          setError(`No data received from Firebase path: ${path}. Check your device and database.`);
         }
       } catch (e: any) {
         console.error("Firebase data processing error:", e);
-        setError("Failed to process data from Firebase.");
+        setError(`Failed to process data from Firebase path: ${path}.`);
       } finally {
         setIsLoading(false);
       }
     };
     
-    const onError = (err: any) => {
-      console.error("Firebase Read Error:", err);
-      setError("Failed to read data from Firebase.");
+    const onError = (path: string) => (err: any) => {
+      console.error(`Firebase Read Error on ${path}:`, err);
+      setError(`Failed to read data from Firebase path: ${path}.`);
       setIsLoading(false);
     };
 
@@ -78,18 +97,24 @@ const useFirebaseData = () => {
       }
     });
 
-    const dataListener = onValue(rootRef, onData, onError);
+    const sensorListener = onValue(sensorsRef, onData('sensors'), onError('sensors'));
+    const actuatorListener = onValue(actuatorsRef, onData('actuators'), onError('actuators'));
+    const systemListener = onValue(systemRef, onData('system'), onError('system'));
 
     return () => {
-      off(rootRef, 'value', dataListener);
+      off(sensorsRef, 'value', sensorListener);
+      off(actuatorsRef, 'value', actuatorListener);
+      off(systemRef, 'value', systemListener);
       const connectedListenerUnsubscribe = onValue(connectedRef, () => {});
       connectedListenerUnsubscribe();
     };
   }, [error]);
 
-  const soilMoisturePercent = Math.max(0, Math.min(100, ((4095 - sensors.soilMoisture) / 4095) * 100));
+  const soilMoisturePercent = sensors.soilMoisturePercent;
+  const lastUpdated = system.lastUpdate;
+  const deviceOnline = system.deviceOnline && isConnected;
 
-  return { sensors: { ...sensors, soilMoisture: soilMoisturePercent, temperature: sensors.temperature, humidity: sensors.humidity }, actuators, lastUpdated, isConnected, isLoading, error };
+  return { sensors: { ...sensors, soilMoisture: soilMoisturePercent }, actuators, lastUpdated, isConnected: deviceOnline, isLoading, error };
 };
 
 const StatusIndicator = ({ isConnected, isLoading, lastUpdated, error }: { isConnected: boolean, isLoading: boolean, lastUpdated: string | null, error: string | null }) => (
@@ -101,7 +126,7 @@ const StatusIndicator = ({ isConnected, isLoading, lastUpdated, error }: { isCon
     <div className="text-sm text-muted-foreground">
       {isLoading ? <Skeleton className="h-4 w-48" /> : (
         error ? <span className="text-destructive">{error}</span> :
-        lastUpdated ? `Last Updated: ${format(new Date(parseInt(lastUpdated) * 1000), "PPP p")}` : 'Waiting for data...'
+        lastUpdated ? `Last Updated: ${format(new Date(parseInt(lastUpdated)), "PPP p")}` : 'Waiting for data...'
       )}
     </div>
   </div>

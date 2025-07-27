@@ -18,9 +18,9 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, description, i
   const switchId = `switch-${title.toLowerCase().replace(/\s+/g, '-')}`;
 
   const handleCheckedChange = (checked: boolean) => {
-    const actuatorPath = title === 'Grow Light' ? 'actuators/bulbStatus' : 'actuators/pumpStatus';
-    // Send 1 for true (ON) and 0 for false (OFF) for better compatibility with ESP32/Arduino
-    set(ref(database, actuatorPath), checked ? 1 : 0);
+    const commandPath = title === 'Grow Light' ? 'controls/manualBulbCommand' : 'controls/manualPumpCommand';
+    // Send boolean true/false for the command
+    set(ref(database, commandPath), checked);
   };
 
   return (
