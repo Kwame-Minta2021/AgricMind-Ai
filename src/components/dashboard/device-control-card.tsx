@@ -1,19 +1,26 @@
+
 import type { LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { getDatabase, ref, set } from "firebase/database";
 
 interface DeviceControlCardProps {
   title: string;
   icon: LucideIcon;
   isChecked: boolean;
-  onCheckedChange: (checked: boolean) => void;
   description: string;
   isLoading?: boolean;
 }
 
-export function DeviceControlCard({ title, icon: Icon, isChecked, onCheckedChange, description, isLoading }: DeviceControlCardProps) {
+export function DeviceControlCard({ title, icon: Icon, isChecked, description, isLoading }: DeviceControlCardProps) {
   const switchId = `switch-${title.toLowerCase().replace(/\s+/g, '-')}`;
+
+  const handleCheckedChange = (checked: boolean) => {
+    const db = getDatabase();
+    const actuatorPath = title === 'Grow Light' ? 'actuators/bulbStatus' : 'actuators/pumpStatus';
+    set(ref(db, actuatorPath), checked);
+  };
 
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 h-full bg-card/80 backdrop-blur-sm">
@@ -30,7 +37,7 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, onCheckedChang
           <Switch
             id={switchId}
             checked={isChecked}
-            onCheckedChange={onCheckedChange}
+            onCheckedChange={handleCheckedChange}
             disabled={isLoading}
             aria-label={`Toggle ${title}`}
           />

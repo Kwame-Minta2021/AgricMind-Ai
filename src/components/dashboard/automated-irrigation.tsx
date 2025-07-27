@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -8,36 +9,32 @@ import { automateIrrigation } from '@/ai/flows/automated-irrigation-control';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
+import { getDatabase, ref, set } from "firebase/database";
 
 interface AutomatedIrrigationProps {
   currentPumpStatus: boolean;
-  onPumpStatusChange: (newStatus: boolean) => void;
   onNewInsight: (insight: string) => void;
   currentSoilMoisture: number;
 }
 
 const OPTIMAL_MOISTURE = 60;
 
-export function AutomatedIrrigation({ currentPumpStatus, onPumpStatusChange, onNewInsight, currentSoilMoisture }: AutomatedIrrigationProps) {
-  const [soilMoisture, setSoilMoisture] = useState(currentSoilMoisture);
+export function AutomatedIrrigation({ currentPumpStatus, onNewInsight, currentSoilMoisture }: AutomatedIrrigationProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    setSoilMoisture(currentSoilMoisture);
-  }, [currentSoilMoisture]);
   
   const handleAutomation = async () => {
     setIsLoading(true);
     try {
       const result = await automateIrrigation({
-        soilMoisture,
+        soilMoisture: currentSoilMoisture,
         optimalMoisture: OPTIMAL_MOISTURE,
         pumpStatus: currentPumpStatus,
       });
 
       if (result.newPumpStatus !== currentPumpStatus) {
-        onPumpStatusChange(result.newPumpStatus);
+        const db = getDatabase();
+        await set(ref(db, 'actuators/pumpStatus'), result.newPumpStatus);
       }
       onNewInsight(`AI Irrigation: ${result.reason}`);
     } catch (error) {
@@ -66,15 +63,14 @@ export function AutomatedIrrigation({ currentPumpStatus, onPumpStatusChange, onN
         <div>
           <Label htmlFor="soil-moisture" className='flex justify-between mb-2'>
             <span>Live Soil Moisture</span>
-            <span className='font-bold text-primary'>{soilMoisture}%</span>
+            <span className='font-bold text-primary'>{currentSoilMoisture.toFixed(1)}%</span>
           </Label>
           <Slider
             id="soil-moisture"
             min={0}
             max={100}
             step={1}
-            value={[soilMoisture]}
-            onValueChange={(value) => setSoilMoisture(value[0])}
+            value={[currentSoilMoisture]}
             disabled={true}
           />
           <div className='text-xs text-muted-foreground mt-1 text-right'>Optimal Level: {OPTIMAL_MOISTURE}%</div>

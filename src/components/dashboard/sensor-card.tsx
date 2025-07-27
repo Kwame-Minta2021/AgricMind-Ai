@@ -1,3 +1,4 @@
+
 import type { LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,7 +12,7 @@ interface SensorCardProps {
 }
 
 export function SensorCard({ title, icon: Icon, value, unit, isLoading }: SensorCardProps) {
-  const displayValue = value !== undefined ? value.toFixed(2) : '0.00';
+  const displayValue = value !== undefined ? value.toFixed(1) : '0.0';
   
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 bg-card/80 backdrop-blur-sm">
