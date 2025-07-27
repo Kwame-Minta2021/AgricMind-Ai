@@ -44,7 +44,11 @@ const useFirebaseData = () => {
         const value = snapshot.val();
         if (value) {
           setSensors(value.sensors || { temperature: 0, humidity: 0, soilMoisture: 0 });
-          setActuators(value.actuators || { pumpStatus: false, bulbStatus: false });
+          // Convert incoming 0/1 to boolean for UI state
+          setActuators({
+            pumpStatus: !!value.actuators?.pumpStatus,
+            bulbStatus: !!value.actuators?.bulbStatus
+          });
           setLastUpdated(value.lastUpdated || null);
           setError(null);
         } else {
@@ -74,17 +78,16 @@ const useFirebaseData = () => {
       }
     });
 
-    const unsubscribe = onValue(rootRef, onData, onError);
+    const dataListener = onValue(rootRef, onData, onError);
 
     return () => {
-      off(rootRef);
-      // The listener on '.info/connected' is managed by Firebase and doesn't need to be turned off manually with `off(connectedRef)`.
-      // The `onValue` for `connectedRef` returns an unsubscribe function, which we can call.
-      onConnected();
+      off(rootRef, 'value', dataListener);
+      const connectedListenerUnsubscribe = onValue(connectedRef, () => {});
+      connectedListenerUnsubscribe();
     };
   }, [error]);
 
-  const soilMoisturePercent = Math.max(0, Math.min(100, ((sensors.soilMoisture) / 4095) * 100));
+  const soilMoisturePercent = Math.max(0, Math.min(100, ((4095 - sensors.soilMoisture) / 4095) * 100));
 
   return { sensors: { ...sensors, soilMoisture: soilMoisturePercent, temperature: sensors.temperature, humidity: sensors.humidity }, actuators, lastUpdated, isConnected, isLoading, error };
 };
