@@ -33,10 +33,17 @@ interface SystemData {
   lastUpdate: string;
 }
 
+interface ControlsData {
+  remoteControlEnabled: boolean;
+  remotePumpControl: boolean;
+  remoteBulbControl: boolean;
+}
+
 const useFirebaseData = () => {
   const [sensors, setSensors] = useState<SensorData>({ temperature: 0, humidity: 0, soilMoisture: 0, soilMoisturePercent: 0 });
   const [actuators, setActuators] = useState<ActuatorData>({ pumpStatus: false, bulbStatus: false });
   const [system, setSystem] = useState<SystemData>({ deviceOnline: false, lastUpdate: '' });
+  const [controls, setControls] = useState<ControlsData>({ remoteControlEnabled: false, remotePumpControl: false, remoteBulbControl: false });
   const [isConnected, setIsConnected] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +52,7 @@ const useFirebaseData = () => {
     const sensorsRef = ref(database, 'sensors');
     const actuatorsRef = ref(database, 'actuators');
     const systemRef = ref(database, 'system');
+    const controlsRef = ref(database, 'controls');
     const connectedRef = ref(database, '.info/connected');
 
     const onData = (path: string) => (snapshot: any) => {
@@ -67,6 +75,12 @@ const useFirebaseData = () => {
             setSystem({
               deviceOnline: !!value.deviceOnline,
               lastUpdate: value.lastUpdate || ''
+            });
+          } else if (path === 'controls') {
+            setControls({
+                remoteControlEnabled: !!value.remoteControlEnabled,
+                remotePumpControl: !!value.remotePumpControl,
+                remoteBulbControl: !!value.remoteBulbControl,
             });
           }
           setError(null);
@@ -100,11 +114,13 @@ const useFirebaseData = () => {
     const sensorListener = onValue(sensorsRef, onData('sensors'), onError('sensors'));
     const actuatorListener = onValue(actuatorsRef, onData('actuators'), onError('actuators'));
     const systemListener = onValue(systemRef, onData('system'), onError('system'));
+    const controlsListener = onValue(controlsRef, onData('controls'), onError('controls'));
 
     return () => {
       off(sensorsRef, 'value', sensorListener);
       off(actuatorsRef, 'value', actuatorListener);
       off(systemRef, 'value', systemListener);
+      off(controlsRef, 'value', controlsListener);
       const connectedListenerUnsubscribe = onValue(connectedRef, () => {});
       connectedListenerUnsubscribe();
     };
@@ -114,7 +130,7 @@ const useFirebaseData = () => {
   const lastUpdated = system.lastUpdate;
   const deviceOnline = system.deviceOnline && isConnected;
 
-  return { sensors: { ...sensors, soilMoisture: soilMoisturePercent }, actuators, lastUpdated, isConnected: deviceOnline, isLoading, error };
+  return { sensors: { ...sensors, soilMoisture: soilMoisturePercent }, actuators, controls, lastUpdated, isConnected: deviceOnline, isLoading, error };
 };
 
 const StatusIndicator = ({ isConnected, isLoading, lastUpdated, error }: { isConnected: boolean, isLoading: boolean, lastUpdated: string | null, error: string | null }) => (
@@ -134,7 +150,7 @@ const StatusIndicator = ({ isConnected, isLoading, lastUpdated, error }: { isCon
 
 
 export default function DashboardPage() {
-  const { sensors, actuators, lastUpdated, isConnected, isLoading, error } = useFirebaseData();
+  const { sensors, actuators, controls, lastUpdated, isConnected, isLoading, error } = useFirebaseData();
   const [insights, setInsights] = useState<string[]>([]);
 
   const handleNewInsight = (insight: string) => {
@@ -174,6 +190,7 @@ export default function DashboardPage() {
                     title="Grow Light"
                     icon={Lightbulb}
                     isChecked={actuators.bulbStatus}
+                    isRemoteControlled={controls.remoteBulbControl}
                     description="Simulated sunlight"
                     isLoading={isLoading}
                 />
@@ -181,6 +198,7 @@ export default function DashboardPage() {
                     title="Water Pump"
                     icon={CloudRain}
                     isChecked={actuators.pumpStatus}
+                    isRemoteControlled={controls.remotePumpControl}
                     description="Irrigation system"
                     isLoading={isLoading}
                 />
