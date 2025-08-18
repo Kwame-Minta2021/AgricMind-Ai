@@ -25,11 +25,14 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
   const handleCheckedChange = async (checked: boolean) => {
     const isBulb = title === 'Grow Light';
     const remoteControlPath = isBulb ? 'controls/remoteBulbControl' : 'controls/remotePumpControl';
-    const commandPath = isBulb ? 'controls/manualBulbCommand' : 'controls/manualPumpCommand';
+    const commandPath = isBulb ? 'controls/manualBulbCommand' : 'controls/manualBulbCommand';
 
     // First, ensure the device is in remote mode.
     await set(ref(database, remoteControlPath), true);
     
+    // Add a small delay to allow the ESP32 to process the mode change
+    await new Promise(resolve => setTimeout(resolve, 50));
+
     // Then, send the on/off command.
     await set(ref(database, commandPath), checked);
   };
@@ -38,16 +41,16 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
 
   const getStatusDescription = () => {
     if (isMasterDisabled) return "Remote master disabled";
-    if (isRemoteControlled) {
-      return <span className="text-green-600 font-semibold">Remote Mode</span>;
-    }
     const mode = title === 'Grow Light' ? 'Manual' : 'Auto';
+    if (isRemoteControlled) {
+      return <span className="text-primary font-semibold">Remote Mode</span>;
+    }
     return `${mode} Mode`;
   };
   
   const getDisabledMessage = () => {
     if (isLoading) return "Loading...";
-    if (!remoteControlEnabled) return "Enable remote master";
+    if (!remoteControlEnabled) return "Enable master remote";
     return isChecked ? 'Device is ON' : 'Device is OFF';
   };
 
