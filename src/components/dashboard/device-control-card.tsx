@@ -3,8 +3,7 @@
 
 import type { LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { database } from '@/lib/firebase';
 import { ref, set } from "firebase/database";
 import { cn } from '@/lib/utils';
@@ -20,12 +19,11 @@ interface DeviceControlCardProps {
 }
 
 export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, remoteControlEnabled, isRemoteControlled }: DeviceControlCardProps) {
-  const switchId = `switch-${title.toLowerCase().replace(/\s+/g, '-')}`;
 
   const handleCheckedChange = async (checked: boolean) => {
     const isBulb = title === 'Grow Light';
     const remoteControlPath = isBulb ? 'controls/remoteBulbControl' : 'controls/remotePumpControl';
-    const commandPath = isBulb ? 'controls/manualBulbCommand' : 'controls/manualBulbCommand';
+    const commandPath = isBulb ? 'controls/manualBulbCommand' : 'controls/manualPumpCommand';
 
     // First, ensure the device is in remote mode.
     await set(ref(database, remoteControlPath), true);
@@ -51,6 +49,7 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
   const getDisabledMessage = () => {
     if (isLoading) return "Loading...";
     if (!remoteControlEnabled) return "Enable master remote";
+    if (!isRemoteControlled) return "Set to Remote to control";
     return isChecked ? 'Device is ON' : 'Device is OFF';
   };
 
@@ -68,16 +67,16 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
           </div>
 
           <div className="flex flex-col items-end space-y-1">
-            <Switch
-              id={switchId}
-              checked={isChecked}
-              onCheckedChange={handleCheckedChange}
+            <Button
+              onClick={() => handleCheckedChange(!isChecked)}
               disabled={isMasterDisabled}
-              aria-label={`Toggle ${title}`}
-            />
-            <Label htmlFor={switchId} className={cn("text-xs", isMasterDisabled ? "text-muted-foreground/50" : "text-muted-foreground")}>
-              {getDisabledMessage()}
-            </Label>
+              variant={isChecked ? 'destructive' : 'default'}
+              size="sm"
+              className="w-24"
+            >
+              <Power className="mr-2 h-4 w-4" />
+              {isChecked ? 'Turn OFF' : 'Turn ON'}
+            </Button>
           </div>
         </div>
       </CardContent>
