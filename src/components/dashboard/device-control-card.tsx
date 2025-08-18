@@ -59,7 +59,7 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
           disabled={isMasterDisabled}
           variant={isChecked ? 'destructive' : 'default'}
           size="sm"
-          className="w-full"
+          className="w-full rounded-full"
         >
           <Power className="mr-2 h-4 w-4" />
           {isChecked ? 'Turn OFF' : 'Turn ON'}
