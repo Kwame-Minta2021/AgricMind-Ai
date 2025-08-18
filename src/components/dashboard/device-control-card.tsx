@@ -18,9 +18,10 @@ interface DeviceControlCardProps {
   description: string;
   isLoading?: boolean;
   remoteControlEnabled: boolean;
+  isRemoteControlled: boolean;
 }
 
-export function DeviceControlCard({ title, icon: Icon, isChecked, isDisabled, description, isLoading, remoteControlEnabled }: DeviceControlCardProps) {
+export function DeviceControlCard({ title, icon: Icon, isChecked, isDisabled, description, isLoading, remoteControlEnabled, isRemoteControlled }: DeviceControlCardProps) {
   const switchId = `switch-${title.toLowerCase().replace(/\s+/g, '-')}`;
   const [localChecked, setLocalChecked] = useState(isChecked);
 
@@ -28,17 +29,28 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isDisabled, de
     setLocalChecked(isChecked);
   }, [isChecked]);
 
-  const handleCheckedChange = (checked: boolean) => {
+  const handleCheckedChange = async (checked: boolean) => {
     if (isDisabled) return;
     setLocalChecked(checked); // Optimistic UI update
-    const commandPath = title === 'Grow Light' ? 'controls/manualBulbCommand' : 'controls/manualPumpCommand';
-    set(ref(database, commandPath), checked);
+
+    const isBulb = title === 'Grow Light';
+    const remoteControlPath = isBulb ? 'controls/remoteBulbControl' : 'controls/remotePumpControl';
+    const commandPath = isBulb ? 'controls/manualBulbCommand' : 'controls/manualPumpCommand';
+
+    // If not in remote mode, switch to it first.
+    if (!isRemoteControlled) {
+      await set(ref(database, remoteControlPath), true);
+    }
+    
+    // Send the on/off command
+    await set(ref(database, commandPath), checked);
   };
   
   const getDisabledMessage = () => {
     if (isLoading) return "Loading...";
     if (!remoteControlEnabled) return "Enable remote master";
-    if (isDisabled) return "Set to remote mode";
+    // The control is no longer disabled just because it's not in remote mode,
+    // since we now handle that automatically.
     return description;
   };
 

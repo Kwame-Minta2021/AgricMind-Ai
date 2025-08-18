@@ -29,6 +29,7 @@ interface ActuatorData {
 
 interface SystemData {
   deviceOnline: boolean;
+  lastUpdate: string;
 }
 
 interface ControlsData {
@@ -40,7 +41,7 @@ interface ControlsData {
 const useFirebaseData = () => {
   const [sensors, setSensors] = useState<SensorData>({ temperature: 0, humidity: 0, soilMoisture: 0, soilMoisturePercent: 0 });
   const [actuators, setActuators] = useState<ActuatorData>({ pumpStatus: false, bulbStatus: false });
-  const [system, setSystem] = useState<SystemData>({ deviceOnline: false });
+  const [system, setSystem] = useState<SystemData>({ deviceOnline: false, lastUpdate: '' });
   const [controls, setControls] = useState<ControlsData>({ remoteControlEnabled: false, remotePumpControl: false, remoteBulbControl: false });
   const [isConnected, setIsConnected] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -85,6 +86,7 @@ const useFirebaseData = () => {
         if (value) {
           setSystem({
             deviceOnline: !!value.deviceOnline,
+            lastUpdate: value.lastUpdate || '',
           });
         }
       }, (err) => {
@@ -129,10 +131,8 @@ const useFirebaseData = () => {
   }, [error]);
 
   const deviceOnline = system.deviceOnline && isConnected;
-  const soilMoisturePercent = sensors.soilMoisturePercent;
-
-
-  return { sensors: { ...sensors, soilMoisture: soilMoisturePercent }, actuators, controls, isConnected: deviceOnline, isLoading, error };
+  
+  return { sensors, actuators, controls, system, isConnected: deviceOnline, isLoading, error };
 };
 
 const StatusIndicator = ({ isConnected, isLoading, error }: { isConnected: boolean, isLoading: boolean, error: string | null }) => (
@@ -157,15 +157,15 @@ const StatusIndicator = ({ isConnected, isLoading, error }: { isConnected: boole
 
 
 export default function DashboardPage() {
-  const { sensors, actuators, controls, isConnected, isLoading, error } = useFirebaseData();
+  const { sensors, actuators, controls, system, isConnected, isLoading, error } = useFirebaseData();
   const [insights, setInsights] = useState<string[]>([]);
 
   const handleNewInsight = (insight: string) => {
     setInsights(prev => [insight, ...prev].slice(0, 10)); // Keep last 10 insights
   };
   
-  const isBulbControlDisabled = isLoading || !controls.remoteControlEnabled || !controls.remoteBulbControl;
-  const isPumpControlDisabled = isLoading || !controls.remoteControlEnabled || !controls.remotePumpControl;
+  const isBulbControlDisabled = isLoading || !controls.remoteControlEnabled;
+  const isPumpControlDisabled = isLoading || !controls.remoteControlEnabled;
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -201,18 +201,20 @@ export default function DashboardPage() {
                     icon={Lightbulb}
                     isChecked={actuators.bulbStatus}
                     isDisabled={isBulbControlDisabled}
-                    description="Simulated sunlight"
+                    description={controls.remoteBulbControl ? "Remote" : "Manual"}
                     isLoading={isLoading}
                     remoteControlEnabled={controls.remoteControlEnabled}
+                    isRemoteControlled={controls.remoteBulbControl}
                 />
                 <DeviceControlCard
                     title="Water Pump"
                     icon={CloudRain}
                     isChecked={actuators.pumpStatus}
                     isDisabled={isPumpControlDisabled}
-                    description="Irrigation system"
+                    description={controls.remotePumpControl ? "Remote" : "Auto"}
                     isLoading={isLoading}
                     remoteControlEnabled={controls.remoteControlEnabled}
+                    isRemoteControlled={controls.remotePumpControl}
                 />
             </div>
           </div>
