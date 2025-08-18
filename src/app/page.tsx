@@ -2,10 +2,9 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { ref, onValue, off, set } from "firebase/database";
+import { ref, onValue, off } from "firebase/database";
 import { database } from '@/lib/firebase';
 import { Thermometer, Droplets, Waves, Lightbulb, CloudRain, Wifi, WifiOff } from 'lucide-react';
-import { format } from 'date-fns';
 
 import { Header } from '@/components/dashboard/header';
 import { SensorCard } from '@/components/dashboard/sensor-card';
@@ -30,7 +29,6 @@ interface ActuatorData {
 
 interface SystemData {
   deviceOnline: boolean;
-  lastUpdate: string;
 }
 
 interface ControlsData {
@@ -42,7 +40,7 @@ interface ControlsData {
 const useFirebaseData = () => {
   const [sensors, setSensors] = useState<SensorData>({ temperature: 0, humidity: 0, soilMoisture: 0, soilMoisturePercent: 0 });
   const [actuators, setActuators] = useState<ActuatorData>({ pumpStatus: false, bulbStatus: false });
-  const [system, setSystem] = useState<SystemData>({ deviceOnline: false, lastUpdate: '' });
+  const [system, setSystem] = useState<SystemData>({ deviceOnline: false });
   const [controls, setControls] = useState<ControlsData>({ remoteControlEnabled: false, remotePumpControl: false, remoteBulbControl: false });
   const [isConnected, setIsConnected] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,82 +53,86 @@ const useFirebaseData = () => {
     const controlsRef = ref(database, 'controls');
     const connectedRef = ref(database, '.info/connected');
 
-    const onData = (path: string) => (snapshot: any) => {
-      try {
+    const listeners = [
+      onValue(sensorsRef, (snapshot) => {
         const value = snapshot.val();
         if (value) {
-          if (path === 'sensors') {
-            setSensors({
-              temperature: value.temperature || 0,
-              humidity: value.humidity || 0,
-              soilMoisture: value.soilMoisture || 0,
-              soilMoisturePercent: value.soilMoisturePercent || 0,
-            });
-          } else if (path === 'actuators') {
-            setActuators({
-              pumpStatus: !!value.pumpStatus,
-              bulbStatus: !!value.bulbStatus
-            });
-          } else if (path === 'system') {
-            setSystem({
-              deviceOnline: !!value.deviceOnline,
-              lastUpdate: value.lastUpdate || ''
-            });
-          } else if (path === 'controls') {
-            setControls({
-                remoteControlEnabled: !!value.remoteControlEnabled,
-                remotePumpControl: !!value.remotePumpControl,
-                remoteBulbControl: !!value.remoteBulbControl,
-            });
-          }
-          setError(null);
-        } else {
-          setError(`No data received from Firebase path: ${path}. Check your device and database.`);
+          setSensors({
+            temperature: value.temperature || 0,
+            humidity: value.humidity || 0,
+            soilMoisture: value.soilMoisture || 0,
+            soilMoisturePercent: value.soilMoisturePercent || 0,
+          });
         }
-      } catch (e: any) {
-        console.error("Firebase data processing error:", e);
-        setError(`Failed to process data from Firebase path: ${path}.`);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    const onError = (path: string) => (err: any) => {
-      console.error(`Firebase Read Error on ${path}:`, err);
-      setError(`Failed to read data from Firebase path: ${path}.`);
-      setIsLoading(false);
-    };
+      }, (err) => {
+        console.error("Firebase sensor read error:", err);
+        setError("Failed to read sensor data.");
+      }),
+      onValue(actuatorsRef, (snapshot) => {
+        const value = snapshot.val();
+        if (value) {
+          setActuators({
+            pumpStatus: !!value.pumpStatus,
+            bulbStatus: !!value.bulbStatus,
+          });
+        }
+      }, (err) => {
+        console.error("Firebase actuator read error:", err);
+        setError("Failed to read actuator data.");
+      }),
+      onValue(systemRef, (snapshot) => {
+        const value = snapshot.val();
+        if (value) {
+          setSystem({
+            deviceOnline: !!value.deviceOnline,
+          });
+        }
+      }, (err) => {
+        console.error("Firebase system read error:", err);
+        setError("Failed to read system data.");
+      }),
+      onValue(controlsRef, (snapshot) => {
+        const value = snapshot.val();
+        if (value) {
+          setControls({
+            remoteControlEnabled: !!value.remoteControlEnabled,
+            remotePumpControl: !!value.remotePumpControl,
+            remoteBulbControl: !!value.remoteBulbControl,
+          });
+        }
+      }, (err) => {
+        console.error("Firebase controls read error:", err);
+        setError("Failed to read control settings.");
+      }),
+      onValue(connectedRef, (snapshot) => {
+        const connected = snapshot.val() === true;
+        setIsConnected(connected);
+        if (!connected) {
+          setError("Connection to Firebase lost. Retrying...");
+        } else if (error === "Connection to Firebase lost. Retrying...") {
+          setError(null);
+        }
+      })
+    ];
 
-    const onConnected = onValue(connectedRef, (snap) => {
-      const connected = snap.val() === true;
-      setIsConnected(connected);
-      if (!connected) {
-        setError("Connection to Firebase lost. Retrying...");
-      } else if (error === "Connection to Firebase lost. Retrying...") {
-        setError(null);
-      }
-    });
-
-    const sensorListener = onValue(sensorsRef, onData('sensors'), onError('sensors'));
-    const actuatorListener = onValue(actuatorsRef, onData('actuators'), onError('actuators'));
-    const systemListener = onValue(systemRef, onData('system'), onError('system'));
-    const controlsListener = onValue(controlsRef, onData('controls'), onError('controls'));
+    // Unified loading state
+    const timer = setTimeout(() => setIsLoading(false), 2000); // Give it 2s to fetch initial data
 
     return () => {
-      off(sensorsRef, 'value', sensorListener);
-      off(actuatorsRef, 'value', actuatorListener);
-      off(systemRef, 'value', systemListener);
-      off(controlsRef, 'value', controlsListener);
-      const connectedListenerUnsubscribe = onValue(connectedRef, () => {});
-      connectedListenerUnsubscribe();
+      clearTimeout(timer);
+      off(sensorsRef);
+      off(actuatorsRef);
+      off(systemRef);
+      off(controlsRef);
+      off(connectedRef);
     };
   }, [error]);
 
-  const soilMoisturePercent = sensors.soilMoisturePercent;
-  const lastUpdated = system.lastUpdate;
   const deviceOnline = system.deviceOnline && isConnected;
+  const soilMoisturePercent = sensors.soilMoisturePercent;
 
-  return { sensors: { ...sensors, soilMoisture: soilMoisturePercent }, actuators, controls, lastUpdated, isConnected: deviceOnline, isLoading, error };
+
+  return { sensors: { ...sensors, soilMoisture: soilMoisturePercent }, actuators, controls, isConnected: deviceOnline, isLoading, error };
 };
 
 const StatusIndicator = ({ isConnected, isLoading, error }: { isConnected: boolean, isLoading: boolean, error: string | null }) => (
@@ -140,8 +142,14 @@ const StatusIndicator = ({ isConnected, isLoading, error }: { isConnected: boole
       <span>{isConnected ? 'Online' : 'Offline'}</span>
     </Badge>
     <div className="text-sm text-muted-foreground">
-      {isLoading ? <Skeleton className="h-4 w-48" /> : (
-        error ? <span className="text-destructive">{error}</span> : 'Waiting for data...'
+      {isLoading ? (
+        <Skeleton className="h-4 w-48" />
+      ) : error ? (
+        <span className="text-destructive">{error}</span>
+      ) : isConnected ? (
+        'Live data connection established.'
+      ) : (
+        'Device is offline. Waiting for connection...'
       )}
     </div>
   </div>
@@ -155,6 +163,9 @@ export default function DashboardPage() {
   const handleNewInsight = (insight: string) => {
     setInsights(prev => [insight, ...prev].slice(0, 10)); // Keep last 10 insights
   };
+  
+  const isBulbControlDisabled = isLoading || !controls.remoteControlEnabled || !controls.remoteBulbControl;
+  const isPumpControlDisabled = isLoading || !controls.remoteControlEnabled || !controls.remotePumpControl;
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -180,7 +191,7 @@ export default function DashboardPage() {
             <SensorCard
               title="Soil Moisture"
               icon={Waves}
-              value={sensors.soilMoisture}
+              value={sensors.soilMoisturePercent}
               unit="%"
               isLoading={isLoading}
             />
@@ -189,29 +200,31 @@ export default function DashboardPage() {
                     title="Grow Light"
                     icon={Lightbulb}
                     isChecked={actuators.bulbStatus}
-                    isRemoteControlled={controls.remoteBulbControl}
+                    isDisabled={isBulbControlDisabled}
                     description="Simulated sunlight"
                     isLoading={isLoading}
+                    remoteControlEnabled={controls.remoteControlEnabled}
                 />
                 <DeviceControlCard
                     title="Water Pump"
                     icon={CloudRain}
                     isChecked={actuators.pumpStatus}
-                    isRemoteControlled={controls.remotePumpControl}
+                    isDisabled={isPumpControlDisabled}
                     description="Irrigation system"
                     isLoading={isLoading}
+                    remoteControlEnabled={controls.remoteControlEnabled}
                 />
             </div>
           </div>
           <div className="mt-8 grid gap-8 md:grid-cols-1 lg:grid-cols-2 animate-in fade-in-0 slide-in-from-bottom-6 duration-700 delay-200">
             <AutomatedIrrigation 
               currentPumpStatus={actuators.pumpStatus}
-              currentSoilMoisture={sensors.soilMoisture}
+              currentSoilMoisture={sensors.soilMoisturePercent}
               onNewInsight={handleNewInsight}
             />
             <CropManagement 
               onNewInsight={handleNewInsight}
-              sensorData={sensors}
+              sensorData={{...sensors, soilMoisture: sensors.soilMoisturePercent}}
             />
           </div>
           <div className="mt-8 animate-in fade-in-0 slide-in-from-bottom-8 duration-900 delay-400">

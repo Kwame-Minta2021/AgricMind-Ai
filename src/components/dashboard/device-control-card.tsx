@@ -14,12 +14,13 @@ interface DeviceControlCardProps {
   title: string;
   icon: LucideIcon;
   isChecked: boolean;
-  isRemoteControlled: boolean;
+  isDisabled: boolean;
   description: string;
   isLoading?: boolean;
+  remoteControlEnabled: boolean;
 }
 
-export function DeviceControlCard({ title, icon: Icon, isChecked, isRemoteControlled, description, isLoading }: DeviceControlCardProps) {
+export function DeviceControlCard({ title, icon: Icon, isChecked, isDisabled, description, isLoading, remoteControlEnabled }: DeviceControlCardProps) {
   const switchId = `switch-${title.toLowerCase().replace(/\s+/g, '-')}`;
   const [localChecked, setLocalChecked] = useState(isChecked);
 
@@ -28,12 +29,18 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isRemoteContro
   }, [isChecked]);
 
   const handleCheckedChange = (checked: boolean) => {
+    if (isDisabled) return;
     setLocalChecked(checked); // Optimistic UI update
     const commandPath = title === 'Grow Light' ? 'controls/manualBulbCommand' : 'controls/manualPumpCommand';
     set(ref(database, commandPath), checked);
   };
   
-  const isDisabled = isLoading || !isRemoteControlled;
+  const getDisabledMessage = () => {
+    if (isLoading) return "Loading...";
+    if (!remoteControlEnabled) return "Enable remote master";
+    if (isDisabled) return "Set to remote mode";
+    return description;
+  };
 
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 h-full bg-card/80 backdrop-blur-sm">
@@ -45,13 +52,13 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isRemoteContro
         <div className="flex items-center justify-between space-x-2">
           <Label htmlFor={switchId} className={cn("flex flex-col space-y-1", isDisabled && "cursor-not-allowed opacity-50")}>
             <span className="font-medium">{localChecked ? 'ON' : 'OFF'}</span>
-            <span className="text-xs text-muted-foreground">{!isRemoteControlled ? "Set to remote" : description}</span>
+            <span className="text-xs text-muted-foreground">{getDisabledMessage()}</span>
           </Label>
           <Switch
             id={switchId}
             checked={localChecked}
             onCheckedChange={handleCheckedChange}
-            disabled={isDisabled}
+            disabled={isDisabled || isLoading}
             aria-label={`Toggle ${title}`}
           />
         </div>
