@@ -39,20 +39,12 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
 
   const getStatusDescription = () => {
     if (isMasterDisabled) return "Remote master disabled";
-    const mode = title === 'Grow Light' ? 'Manual' : 'Auto';
     if (isRemoteControlled) {
       return <span className="text-primary font-semibold">Remote Mode</span>;
     }
-    return `${mode} Mode`;
+    return title === 'Grow Light' ? "Manual Mode" : "Auto Mode";
   };
   
-  const getDisabledMessage = () => {
-    if (isLoading) return "Loading...";
-    if (!remoteControlEnabled) return "Enable master remote";
-    if (!isRemoteControlled) return "Set to Remote to control";
-    return isChecked ? 'Device is ON' : 'Device is OFF';
-  };
-
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 h-full bg-card/80 backdrop-blur-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
