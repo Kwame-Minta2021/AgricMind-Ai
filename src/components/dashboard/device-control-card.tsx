@@ -1,7 +1,6 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -14,25 +13,16 @@ interface DeviceControlCardProps {
   title: string;
   icon: LucideIcon;
   isChecked: boolean;
-  isDisabled: boolean;
   description: string;
   isLoading?: boolean;
   remoteControlEnabled: boolean;
   isRemoteControlled: boolean;
 }
 
-export function DeviceControlCard({ title, icon: Icon, isChecked, isDisabled, description, isLoading, remoteControlEnabled, isRemoteControlled }: DeviceControlCardProps) {
+export function DeviceControlCard({ title, icon: Icon, isChecked, description, isLoading, remoteControlEnabled, isRemoteControlled }: DeviceControlCardProps) {
   const switchId = `switch-${title.toLowerCase().replace(/\s+/g, '-')}`;
-  const [localChecked, setLocalChecked] = useState(isChecked);
-
-  useEffect(() => {
-    setLocalChecked(isChecked);
-  }, [isChecked]);
 
   const handleCheckedChange = async (checked: boolean) => {
-    if (isDisabled) return;
-    setLocalChecked(checked); // Optimistic UI update
-
     const isBulb = title === 'Grow Light';
     const remoteControlPath = isBulb ? 'controls/remoteBulbControl' : 'controls/remotePumpControl';
     const commandPath = isBulb ? 'controls/manualBulbCommand' : 'controls/manualPumpCommand';
@@ -46,11 +36,11 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isDisabled, de
     await set(ref(database, commandPath), checked);
   };
   
+  const isDisabled = isLoading || !remoteControlEnabled;
+
   const getDisabledMessage = () => {
     if (isLoading) return "Loading...";
     if (!remoteControlEnabled) return "Enable remote master";
-    // The control is no longer disabled just because it's not in remote mode,
-    // since we now handle that automatically.
     return description;
   };
 
@@ -63,14 +53,14 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isDisabled, de
       <CardContent>
         <div className="flex items-center justify-between space-x-2">
           <Label htmlFor={switchId} className={cn("flex flex-col space-y-1", isDisabled && "cursor-not-allowed opacity-50")}>
-            <span className="font-medium">{localChecked ? 'ON' : 'OFF'}</span>
+            <span className="font-medium">{isChecked ? 'ON' : 'OFF'}</span>
             <span className="text-xs text-muted-foreground">{getDisabledMessage()}</span>
           </Label>
           <Switch
             id={switchId}
-            checked={localChecked}
+            checked={isChecked}
             onCheckedChange={handleCheckedChange}
-            disabled={isDisabled || isLoading}
+            disabled={isDisabled}
             aria-label={`Toggle ${title}`}
           />
         </div>
