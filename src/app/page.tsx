@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ref, onValue, off } from "firebase/database";
 import { database } from '@/lib/firebase';
 import { Thermometer, Droplets, Waves, Lightbulb, CloudRain, Wifi, WifiOff } from 'lucide-react';
@@ -29,7 +29,6 @@ interface ActuatorData {
 
 interface SystemData {
   deviceOnline: boolean;
-  lastUpdate: string;
 }
 
 interface ControlsData {
@@ -41,11 +40,20 @@ interface ControlsData {
 const useFirebaseData = () => {
   const [sensors, setSensors] = useState<SensorData>({ temperature: 0, humidity: 0, soilMoisture: 0, soilMoisturePercent: 0 });
   const [actuators, setActuators] = useState<ActuatorData>({ pumpStatus: false, bulbStatus: false });
-  const [system, setSystem] = useState<SystemData>({ deviceOnline: false, lastUpdate: '' });
+  const [system, setSystem] = useState<SystemData>({ deviceOnline: false });
   const [controls, setControls] = useState<ControlsData>({ remoteControlEnabled: false, remotePumpControl: false, remoteBulbControl: false });
   const [isConnected, setIsConnected] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  const initialDataReceived = useRef(false);
+
+  const handleInitialLoad = () => {
+    if (!initialDataReceived.current) {
+        initialDataReceived.current = true;
+        setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     const sensorsRef = ref(database, 'sensors');
@@ -64,6 +72,7 @@ const useFirebaseData = () => {
             soilMoisture: value.soilMoisture || 0,
             soilMoisturePercent: value.soilMoisturePercent || 0,
           });
+          handleInitialLoad();
         }
       }, (err) => {
         console.error("Firebase sensor read error:", err);
@@ -86,7 +95,6 @@ const useFirebaseData = () => {
         if (value) {
           setSystem({
             deviceOnline: !!value.deviceOnline,
-            lastUpdate: value.lastUpdate || '',
           });
         }
       }, (err) => {
@@ -117,11 +125,7 @@ const useFirebaseData = () => {
       })
     ];
 
-    // Unified loading state
-    const timer = setTimeout(() => setIsLoading(false), 2000); // Give it 2s to fetch initial data
-
     return () => {
-      clearTimeout(timer);
       off(sensorsRef);
       off(actuatorsRef);
       off(systemRef);
@@ -200,8 +204,6 @@ export default function DashboardPage() {
                     title="Grow Light"
                     icon={Lightbulb}
                     isChecked={actuators.bulbStatus}
-                    isDisabled={isBulbControlDisabled}
-                    description={controls.remoteBulbControl ? "Remote" : "Manual"}
                     isLoading={isLoading}
                     remoteControlEnabled={controls.remoteControlEnabled}
                     isRemoteControlled={controls.remoteBulbControl}
@@ -210,8 +212,6 @@ export default function DashboardPage() {
                     title="Water Pump"
                     icon={CloudRain}
                     isChecked={actuators.pumpStatus}
-                    isDisabled={isPumpControlDisabled}
-                    description={controls.remotePumpControl ? "Remote" : "Auto"}
                     isLoading={isLoading}
                     remoteControlEnabled={controls.remoteControlEnabled}
                     isRemoteControlled={controls.remotePumpControl}
