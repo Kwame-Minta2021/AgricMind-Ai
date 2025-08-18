@@ -22,17 +22,19 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
 
   const handleCheckedChange = async (checked: boolean) => {
     const isBulb = title === 'Grow Light';
-    const remoteControlPath = isBulb ? 'controls/remoteBulbControl' : 'controls/remotePumpControl';
-    const commandPath = isBulb ? 'controls/manualBulbCommand' : 'controls/manualPumpCommand';
 
-    // First, ensure the device is in remote mode.
-    await set(ref(database, remoteControlPath), true);
-    
-    // Add a small delay to allow the ESP32 to process the mode change
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    // Then, send the on/off command.
-    await set(ref(database, commandPath), checked);
+    if (isBulb) {
+      // For the bulb, we need to enable remote mode and send a command
+      await set(ref(database, 'controls/remoteBulbControl'), true);
+      await new Promise(resolve => setTimeout(resolve, 50));
+      await set(ref(database, 'controls/manualBulbCommand'), checked);
+    } else {
+      // For the pump, the AI and manual logic directly sets the actuator status
+      // We will also ensure it's in remote mode to override auto-logic
+       await set(ref(database, 'controls/remotePumpControl'), true);
+       await new Promise(resolve => setTimeout(resolve, 50));
+       await set(ref(database, 'actuators/pumpStatus'), checked);
+    }
   };
   
   const isMasterDisabled = isLoading || !remoteControlEnabled;

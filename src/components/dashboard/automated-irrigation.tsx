@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, Droplets } from 'lucide-react';
@@ -34,6 +34,7 @@ export function AutomatedIrrigation({ currentPumpStatus, onNewInsight, currentSo
       });
 
       if (result.newPumpStatus !== currentPumpStatus) {
+        // AI control should directly set the actuator status
         await set(ref(database, 'actuators/pumpStatus'), result.newPumpStatus);
       }
       onNewInsight(`AI Irrigation: ${result.reason}`);
