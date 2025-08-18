@@ -13,595 +13,562 @@
 #define DATABASE_URL "https://agrimind-a79c9-default-rtdb.firebaseio.com/"
 
 // ----- Pin Definitions -----
-#define DHTPIN 27               // DHT11 data pin
+#define DHTPIN 27
 #define DHTTYPE DHT11
-#define SOIL_PIN 32             // Soil Moisture Sensor on analog GPIO32
-#define BULB_RELAY_PIN 4        // Light Bulb Relay (initially ON)
-#define PUMP_RELAY_PIN 14       // Water Pump Relay (controlled by soil moisture)
+#define SOIL_PIN 32
+#define BULB_RELAY_PIN 4
+#define PUMP_RELAY_PIN 14
 
 // ----- Sensor Setup -----
 DHT dht(DHTPIN, DHTTYPE);
-int moistureThreshold = 2000; // Adjust this based on testing (0=wet, 4095=dry) - can be updated remotely
+
+// ====== NEW: Soil calibration & control settings ======
+struct SoilCalib {
+  int dryRaw  = 3200; // default guess: very dry soil/air (ESP32 0..4095)
+  int wetRaw  = 1200; // default guess: fully wet soil
+} soilCal;
+
+int legacyMoistureThresholdRaw = 2000;   // Kept for backward compatibility
+int moistureLowPct  = 35;                // Pump ON at/under this %
+int moistureHighPct = 45;                // Pump OFF at/over  this %
+bool usePctControl  = true;              // prefer percentage control (recommended)
+
+// ====== NEW: Sampling/filtering parameters ======
+const int SOIL_SAMPLES = 32;             // per readSensors()
+const int PROBE_RAIL_HIGH = 4090;        // near-rail detection
+const int PROBE_RAIL_LOW  = 5;
+const int PROBE_MARGIN    = 30;          // tolerance for rail checks
+const int OUT_OF_RANGE_MARGIN = 100;     // tolerance outside [wetRaw, dryRaw]
+float soilEMA = -1.0f;                   // optional smoothing
+const float EMA_ALPHA = 0.20f;
 
 // ----- Firebase Objects -----
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
 
-// Timing variables
+// Timing
 unsigned long sendDataPrevMillis = 0;
-unsigned long sensorInterval = 2000;  // Read sensors every 2 seconds
-unsigned long firebaseInterval = 5000; // Update Firebase every 5 seconds
+unsigned long sensorInterval = 2000;
+unsigned long firebaseInterval = 5000;
 unsigned long lastFirebaseUpdate = 0;
+unsigned long lastRemoteCheckTime = 0;
+unsigned long remoteCheckInterval = 3000;
 
 // Firebase connection status
 bool firebaseConnected = false;
 
-// Global variables to store current sensor values
+// Global sensor values
 float currentTemperature = 0.0;
 float currentHumidity = 0.0;
-int currentSoilMoisture = 0;
+int   currentSoilMoistureRaw = 0;     // raw ADC (0..4095)
+int   currentSoilMoisturePct = 0;     // calibrated %
+bool  soilPresent = true;
+bool  soilFault   = false;
+
 bool currentPumpStatus = false;
 bool currentBulbStatus = true;
 
-// Remote control variables
-bool remotePumpControl = false;  // When true, pump is controlled remotely
-bool remoteBulbControl = false;  // When true, bulb is controlled remotely
-bool remoteControlEnabled = true; // Master switch for remote control
+// Remote control
+bool remotePumpControl = false;
+bool remoteBulbControl = false;
+bool remoteControlEnabled = true;
 
-// Last time we checked for remote commands
-unsigned long lastRemoteCheckTime = 0;
-unsigned long remoteCheckInterval = 3000; // Check every 3 seconds
+// Hysteresis state (percent-based)
+bool pumpLatchedOn = false;
+
+// Forward decls
+void connectToWiFi();
+void initializeFirebase();
+void initializeFirebaseData();
+void readSensors();
+void updateFirebase();
+void checkRemoteCommands();
+int  medianOf(int *arr, int n);
+int  readSoilRawMedian();
+int  pctFromRaw(int raw);
+void applyPumpLogic();
+void maybeConvertLegacyRawThreshold();
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);
-  
-  Serial.println("=== ESP32 SMART FARMING SYSTEM ===");
-  
-  // Initialize hardware
+  delay(800);
+
+  Serial.println("=== ESP32 SMART FARMING SYSTEM (Calibrated Soil) ===");
+
   dht.begin();
+
   pinMode(BULB_RELAY_PIN, OUTPUT);
   pinMode(PUMP_RELAY_PIN, OUTPUT);
+  digitalWrite(BULB_RELAY_PIN, LOW);   // ON (active LOW)
+  digitalWrite(PUMP_RELAY_PIN, HIGH);  // OFF (active LOW)
+  currentBulbStatus = true;
+  currentPumpStatus = false;
 
-  // Relay startup states
-  digitalWrite(BULB_RELAY_PIN, LOW);  // Relay ON (active LOW)
-  digitalWrite(PUMP_RELAY_PIN, HIGH); // Relay OFF (active LOW)
-  currentBulbStatus = true;  // Track bulb state
-  currentPumpStatus = false; // Track pump state
+  // Improve ADC dynamic range on ESP32
+  analogSetPinAttenuation(SOIL_PIN, ADC_11db); // ~0-3.6V nominal range
 
-  Serial.println("✅ Hardware initialized");
-  Serial.println("💡 Bulb is ON by default");
-
-  // Connect to WiFi
   connectToWiFi();
-  
-  // Initialize Firebase
   initializeFirebase();
-  
+
   Serial.println("=== Setup Complete ===");
   Serial.println("Firebase Status: " + String(firebaseConnected ? "✅ READY" : "❌ FAILED"));
-  Serial.println("Starting main loop...\n");
 }
 
+// ---------------- WiFi ----------------
 void connectToWiFi() {
   Serial.println("📶 Connecting to WiFi...");
   Serial.println("SSID: " + String(WIFI_SSID));
-  
-  // Removed the placeholder check since we have real credentials now
-  
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   int wifiAttempts = 0;
-  
   while (WiFi.status() != WL_CONNECTED && wifiAttempts < 30) {
     delay(1000);
     Serial.print(".");
     wifiAttempts++;
-    
-    // Print status every 10 attempts
     if (wifiAttempts % 10 == 0) {
       Serial.println("\nStill trying to connect... (" + String(wifiAttempts) + "/30)");
     }
   }
-  
+
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n✅ WiFi connected successfully!");
-    Serial.print("📡 IP address: ");
-    Serial.println(WiFi.localIP());
-    Serial.print("📶 Signal strength: ");
-    Serial.println(WiFi.RSSI());
+    Serial.println("\n✅ WiFi connected");
+    Serial.print("📡 IP: "); Serial.println(WiFi.localIP());
+    Serial.print("📶 RSSI: "); Serial.println(WiFi.RSSI());
   } else {
-    Serial.println("\n❌ WiFi connection failed!");
-    Serial.println("Please check:");
-    Serial.println("- WiFi name: " + String(WIFI_SSID));
-    Serial.println("- Password is correct");
-    Serial.println("- Router is 2.4GHz (ESP32 doesn't support 5GHz)");
-    Serial.println("- ESP32 is within range");
-    while(1) {
+    Serial.println("\n❌ WiFi connection failed. Retrying indefinitely...");
+    while (1) {
       delay(5000);
-      Serial.println("Retrying WiFi connection...");
       WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
       delay(10000);
     }
   }
 }
 
+// ---------------- Firebase ----------------
 void initializeFirebase() {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("❌ Cannot initialize Firebase - WiFi not connected");
     return;
   }
-  
+
   Serial.println("🔥 Initializing Firebase...");
-  
-  // Debug: Print credentials being used
-  Serial.println("=== Firebase Configuration ===");
-  Serial.print("🔑 API Key: ");
-  Serial.println(API_KEY);
-  Serial.print("🗄️ Database URL: ");
-  Serial.println(DATABASE_URL);
-  Serial.println("==============================");
-  
-  // Configure Firebase with explicit settings
+  Serial.println("API Key: " + String(API_KEY));
+  Serial.println("DB URL: " + String(DATABASE_URL));
+
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
-  
-  // Set token status callback
   config.token_status_callback = tokenStatusCallback;
-  
-  // Set maximum retry attempts
   config.max_token_generation_retry = 5;
-  
-  // For anonymous authentication
-  Serial.println("🔐 Attempting anonymous authentication...");
-  
-  // Try anonymous signup first
+
+  Serial.println("🔐 Anonymous authentication...");
   if (Firebase.signUp(&config, &auth, "", "")) {
     Serial.println("✅ Anonymous signup successful");
   } else {
-    Serial.print("⚠️ Anonymous signup failed: ");
+    Serial.print("⚠️ Signup failed: ");
     Serial.println(config.signer.signupError.message.c_str());
-    Serial.println("🔄 Trying direct initialization...");
   }
-  
-  // Initialize Firebase
+
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
-  
-  // Wait for Firebase to initialize with timeout
-  Serial.println("⏳ Waiting for Firebase connection...");
+
+  Serial.print("⏳ Waiting for Firebase");
   int attempts = 0;
   while (!Firebase.ready() && attempts < 30) {
     delay(1000);
-    attempts++;
     Serial.print(".");
-    
-    // Print status every 5 attempts
-    if (attempts % 5 == 0) {
-      Serial.println("\n🔄 Still connecting to Firebase... (" + String(attempts) + "/30)");
-    }
+    attempts++;
+    if (attempts % 5 == 0) Serial.println();
   }
-  
-  if (Firebase.ready()) {
-    Serial.println("\n✅ Firebase connected successfully!");
-    firebaseConnected = true;
-    
-    // Test Firebase connection with a simple write
-    Serial.println("🧪 Testing Firebase connection...");
-    if (Firebase.RTDB.setString(&fbdo, "/system/status", "ESP32 Smart Farming Online - " + String(millis()))) {
-      Serial.println("✅ Firebase test write successful");
-    } else {
-      Serial.print("⚠️ Firebase test write failed: ");
-      Serial.println(fbdo.errorReason().c_str());
-    }
-    
-    // Initialize default values in Firebase
-    initializeFirebaseData();
-    
-  } else {
-    Serial.println("\n❌ Firebase connection failed!");
-    Serial.println("🔍 Possible issues:");
-    Serial.println("- Check API key and Database URL");
-    Serial.println("- Verify Firebase project settings");
-    Serial.println("- Check internet connection");
+
+  if (!Firebase.ready()) {
+    Serial.println("\n❌ Firebase not ready. Running locally.");
     firebaseConnected = false;
-    Serial.println("📱 System will continue without Firebase (local operation only)");
+    return;
   }
+
+  Serial.println("\n✅ Firebase ready");
+  firebaseConnected = true;
+
+  // Test write
+  if (Firebase.RTDB.setString(&fbdo, "/system/status", "ESP32 Online - " + String(millis()))) {
+    Serial.println("✅ Test write OK");
+  } else {
+    Serial.print("⚠️ Test write failed: ");
+    Serial.println(fbdo.errorReason().c_str());
+  }
+
+  // Pull calibration & control settings (with defaults if missing)
+  if (Firebase.RTDB.getInt(&fbdo, "/settings/soilCalibration/dryRaw") && fbdo.dataType() == "int") {
+    soilCal.dryRaw = fbdo.intData();
+  }
+  if (Firebase.RTDB.getInt(&fbdo, "/settings/soilCalibration/wetRaw") && fbdo.dataType() == "int") {
+    soilCal.wetRaw = fbdo.intData();
+  }
+  if (Firebase.RTDB.getInt(&fbdo, "/settings/moistureLowPct") && fbdo.dataType() == "int") {
+    moistureLowPct = constrain(fbdo.intData(), 0, 100);
+  }
+  if (Firebase.RTDB.getInt(&fbdo, "/settings/moistureHighPct") && fbdo.dataType() == "int") {
+    moistureHighPct = constrain(fbdo.intData(), 0, 100);
+  }
+  if (Firebase.RTDB.getBool(&fbdo, "/settings/usePctControl") && fbdo.dataType() == "boolean") {
+    usePctControl = fbdo.boolData();
+  }
+  // Legacy raw threshold (if still present)
+  if (Firebase.RTDB.getInt(&fbdo, "/settings/moistureThreshold") && fbdo.dataType() == "int") {
+    legacyMoistureThresholdRaw = fbdo.intData();
+  }
+
+  // Basic sanity to avoid division by zero
+  if (soilCal.dryRaw == soilCal.wetRaw) soilCal.dryRaw = soilCal.wetRaw + 200;
+  if (soilCal.dryRaw < soilCal.wetRaw) {
+    // swap if mis-ordered
+    int tmp = soilCal.dryRaw; soilCal.dryRaw = soilCal.wetRaw; soilCal.wetRaw = tmp;
+  }
+
+  initializeFirebaseData();
+  maybeConvertLegacyRawThreshold();
 }
 
 void initializeFirebaseData() {
-  if (!Firebase.ready()) {
-    Serial.println("❌ Cannot initialize Firebase data - not ready");
-    return;
-  }
-  
-  Serial.println("🔧 Initializing Firebase data structure...");
-  
-  // Initialize sensor data structure
+  if (!Firebase.ready()) return;
+
   Firebase.RTDB.setFloat(&fbdo, "/sensors/temperature", 0.0);
   Firebase.RTDB.setFloat(&fbdo, "/sensors/humidity", 0.0);
-  Firebase.RTDB.setInt(&fbdo, "/sensors/soilMoisture", 0);
-  Firebase.RTDB.setInt(&fbdo, "/sensors/soilMoisturePercent", 0);
-  
-  // Initialize actuator status
+  Firebase.RTDB.setInt(&fbdo,   "/sensors/soilMoisture", 0);           // raw
+  Firebase.RTDB.setInt(&fbdo,   "/sensors/soilMoisturePercent", 0);    // calibrated %
+  Firebase.RTDB.setBool(&fbdo,  "/sensors/soilPresent", true);
+  Firebase.RTDB.setBool(&fbdo,  "/sensors/soilFault", false);
+
   Firebase.RTDB.setBool(&fbdo, "/actuators/pumpStatus", false);
   Firebase.RTDB.setBool(&fbdo, "/actuators/bulbStatus", true);
-  
-  // Initialize remote control settings
+
   Firebase.RTDB.setBool(&fbdo, "/controls/remotePumpControl", false);
   Firebase.RTDB.setBool(&fbdo, "/controls/remoteBulbControl", false);
   Firebase.RTDB.setBool(&fbdo, "/controls/remoteControlEnabled", true);
   Firebase.RTDB.setBool(&fbdo, "/controls/manualPumpCommand", false);
   Firebase.RTDB.setBool(&fbdo, "/controls/manualBulbCommand", true);
-  
-  // Initialize control mode (auto/manual)
   Firebase.RTDB.setString(&fbdo, "/controls/pumpMode", "auto");
   Firebase.RTDB.setString(&fbdo, "/controls/bulbMode", "manual");
-  
-  // Initialize system status
+  Firebase.RTDB.setString(&fbdo, "/controls/calibrate", "NONE"); // DRY, WET, NONE
+
   Firebase.RTDB.setBool(&fbdo, "/system/deviceOnline", true);
   Firebase.RTDB.setString(&fbdo, "/system/deviceId", WiFi.macAddress());
-  Firebase.RTDB.setString(&fbdo, "/system/version", "1.0");
-  Firebase.RTDB.setString(&fbdo, "/system/lastUpdate", String(millis()));
+  Firebase.RTDB.setString(&fbdo, "/system/version", "1.1-calibrated");
   Firebase.RTDB.setString(&fbdo, "/system/ipAddress", WiFi.localIP().toString());
-  
-  // Initialize settings
-  Firebase.RTDB.setInt(&fbdo, "/settings/moistureThreshold", moistureThreshold);
-  Firebase.RTDB.setString(&fbdo, "/settings/sensorInterval", String(sensorInterval));
-  Firebase.RTDB.setString(&fbdo, "/settings/firebaseInterval", String(firebaseInterval));
-  
-  Serial.println("✅ Firebase data structure initialized successfully");
+
+  Firebase.RTDB.setInt(&fbdo, "/settings/soilCalibration/dryRaw", soilCal.dryRaw);
+  Firebase.RTDB.setInt(&fbdo, "/settings/soilCalibration/wetRaw", soilCal.wetRaw);
+  Firebase.RTDB.setInt(&fbdo, "/settings/moistureLowPct", moistureLowPct);
+  Firebase.RTDB.setInt(&fbdo, "/settings/moistureHighPct", moistureHighPct);
+  Firebase.RTDB.setBool(&fbdo, "/settings/usePctControl", usePctControl);
+
+  // Keep legacy value for visibility
+  Firebase.RTDB.setInt(&fbdo, "/settings/moistureThreshold", legacyMoistureThresholdRaw);
 }
 
+// Convert legacy raw threshold into percent (informational write)
+void maybeConvertLegacyRawThreshold() {
+  if (!usePctControl) return;
+  // compute approximate equivalent percent for dashboard info (not used directly)
+  int approxPct = pctFromRaw(legacyMoistureThresholdRaw);
+  Firebase.RTDB.setInt(&fbdo, "/settings/legacyThresholdApproxPct", approxPct);
+}
+
+// ---------------- Main loop ----------------
 void loop() {
-  unsigned long currentMillis = millis();
-  
-  // Check WiFi connection
+  unsigned long now = millis();
+
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("❌ WiFi disconnected, attempting reconnection...");
+    Serial.println("❌ WiFi disconnected, trying to reconnect...");
     firebaseConnected = false;
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     delay(5000);
     return;
   }
-  
-  // Read sensors periodically
-  if (currentMillis - sendDataPrevMillis >= sensorInterval) {
-    sendDataPrevMillis = currentMillis;
+
+  if (now - sendDataPrevMillis >= sensorInterval) {
+    sendDataPrevMillis = now;
     readSensors();
+    applyPumpLogic(); // use freshly computed percent
   }
-  
-  // Update Firebase periodically
-  if (firebaseConnected && (currentMillis - lastFirebaseUpdate >= firebaseInterval)) {
-    lastFirebaseUpdate = currentMillis;
+
+  if (firebaseConnected && (now - lastFirebaseUpdate >= firebaseInterval)) {
+    lastFirebaseUpdate = now;
     updateFirebase();
   }
-  
-  // Check for remote commands periodically
-  if (firebaseConnected && (currentMillis - lastRemoteCheckTime >= remoteCheckInterval)) {
-    lastRemoteCheckTime = currentMillis;
+
+  if (firebaseConnected && (now - lastRemoteCheckTime >= remoteCheckInterval)) {
+    lastRemoteCheckTime = now;
     checkRemoteCommands();
   }
-  
-  delay(100); // Small delay to prevent watchdog issues
+
+  delay(50);
 }
 
+// ---------------- Sensors & Control ----------------
 void readSensors() {
   Serial.println("📊 Reading sensors...");
-  
-  // --- DHT11 Reading with validation ---
-  float temperature = dht.readTemperature();
-  float humidity = dht.readHumidity();
 
-  if (isnan(temperature) || isnan(humidity)) {
-    Serial.println("❌ Failed to read from DHT11!");
-    // Use previous valid values or defaults
-    if (currentTemperature == 0.0) {
-      temperature = 25.0; // Default temperature
-      humidity = 50.0;    // Default humidity
+  // DHT11
+  float t = dht.readTemperature();
+  float h = dht.readHumidity();
+  if (isnan(t) || isnan(h)) {
+    Serial.println("❌ DHT11 failed, using previous/defaults");
+    if (currentTemperature == 0.0 && currentHumidity == 0.0) {
+      t = 25.0; h = 50.0;
     } else {
-      temperature = currentTemperature; // Use last valid reading
-      humidity = currentHumidity;
+      t = currentTemperature; h = currentHumidity;
     }
-    Serial.println("🔄 Using previous/default values");
-  } else {
-    Serial.print("🌡️ Temperature: ");
-    Serial.print(temperature, 1);
-    Serial.print(" °C | 💧 Humidity: ");
-    Serial.print(humidity, 1);
-    Serial.println(" %");
   }
+  currentTemperature = t;
+  currentHumidity    = h;
 
-  // --- Soil Moisture Reading ---
-  int soilValue = analogRead(SOIL_PIN); // 0 (wet) to 4095 (dry)
-  int moisturePercent = map(soilValue, 4095, 0, 0, 100); // Convert to percentage
-  moisturePercent = constrain(moisturePercent, 0, 100);
-  
-  Serial.print("🌱 Soil Moisture Raw: ");
-  Serial.print(soilValue);
-  Serial.print(" | Percentage: ");
-  Serial.print(moisturePercent);
-  Serial.println("%");
+  // Soil raw (median of many samples)
+  int raw = readSoilRawMedian();
+  currentSoilMoistureRaw = raw;
 
-  // --- Control Pump Based on Soil Moisture or Remote Command ---
-  bool pumpStatus = currentPumpStatus; // Keep current status by default
-  
-  if (remotePumpControl) {
-    // Remote control mode - pump controlled by app
-    Serial.println("💻 Pump in REMOTE control mode");
-    // pumpStatus is set by checkRemoteCommands() function
-  } else {
-    // Automatic control mode - pump controlled by soil moisture
-    Serial.println("🤖 Pump in AUTO control mode");
-    if (soilValue > moistureThreshold) {
-      Serial.println("⚠️ Soil is dry (below " + String(moistureThreshold) + "). Turning ON water pump.");
-      pumpStatus = true;
-    } else {
-      Serial.println("✅ Soil is moist (above " + String(moistureThreshold) + "). Turning OFF water pump.");
-      pumpStatus = false;
-    }
-  }
-  
-  // Apply pump control (Active LOW Relay)
-  if (pumpStatus != currentPumpStatus) {
-    if (pumpStatus) {
-      digitalWrite(PUMP_RELAY_PIN, LOW); // Turn ON Pump (active LOW)
-      Serial.println("💦 PUMP: ON");
-    } else {
-      digitalWrite(PUMP_RELAY_PIN, HIGH); // Turn OFF Pump
-      Serial.println("💦 PUMP: OFF");
-    }
-  }
-  
-  // --- Control Bulb Based on Remote Command ---
-  bool bulbStatus = currentBulbStatus; // Keep current status by default
-  
-  if (remoteBulbControl) {
-    // Remote control mode - bulb controlled by app
-    Serial.println("💻 Bulb in REMOTE control mode");
-    // bulbStatus is already updated by checkRemoteCommands() function
-    bulbStatus = currentBulbStatus;
-  } else {
-    // Manual mode - bulb always on by default (can be changed in app)
-    Serial.println("🔧 Bulb in MANUAL mode (always on)");
-    bulbStatus = true;
-    
-    // Apply bulb control immediately in manual mode
-    if (bulbStatus != currentBulbStatus) {
-      digitalWrite(BULB_RELAY_PIN, LOW); // Turn ON Bulb (active LOW)
-      Serial.println("💡 BULB: Forced ON (Manual Mode)");
-      currentBulbStatus = bulbStatus;
-    }
-  }
-  
-  // Apply bulb control (Active LOW Relay) - only if in remote mode
-  if (remoteBulbControl && bulbStatus != currentBulbStatus) {
-    if (bulbStatus) {
-      digitalWrite(BULB_RELAY_PIN, LOW); // Turn ON Bulb (active LOW)
-      Serial.println("💡 BULB: ON (Remote Command)");
-    } else {
-      digitalWrite(BULB_RELAY_PIN, HIGH); // Turn OFF Bulb
-      Serial.println("💡 BULB: OFF (Remote Command)");
-    }
-    currentBulbStatus = bulbStatus;
+  // Probe presence / fault checks
+  soilFault = false;
+  soilPresent = true;
+
+  if (raw >= PROBE_RAIL_HIGH - PROBE_MARGIN || raw <= PROBE_RAIL_LOW + PROBE_MARGIN) {
+    // reading stuck near ADC rails indicates unplugged or wiring fault
+    soilFault = true;
   }
 
-  // Store values for Firebase update
-  currentTemperature = temperature;
-  currentHumidity = humidity;
-  currentSoilMoisture = soilValue;
-  currentPumpStatus = pumpStatus;
-  currentBulbStatus = bulbStatus;
-  
-  // Print summary
-  Serial.println("📋 Current Status:");
-  Serial.println("   🌡️ Temp: " + String(temperature, 1) + "°C");
-  Serial.println("   💧 Humidity: " + String(humidity, 1) + "%");
-  Serial.println("   🌱 Soil: " + String(moisturePercent) + "% (" + String(soilValue) + ")");
-  Serial.println("   💦 Pump: " + String(pumpStatus ? "ON" : "OFF") + " (" + String(remotePumpControl ? "REMOTE" : "AUTO") + ")");
-  Serial.println("   💡 Bulb: " + String(bulbStatus ? "ON" : "OFF") + " (" + String(remoteBulbControl ? "REMOTE" : "MANUAL") + ")");
-  Serial.println("------------------------------------------------");
+  // Out-of-range w.r.t calibration window
+  int minAccept = min(soilCal.wetRaw, soilCal.dryRaw) - OUT_OF_RANGE_MARGIN;
+  int maxAccept = max(soilCal.wetRaw, soilCal.dryRaw) + OUT_OF_RANGE_MARGIN;
+  if (raw < minAccept || raw > maxAccept) {
+    // either not inserted in soil / air, or calibration far off
+    soilPresent = false;
+  }
+
+  // Calibrated %
+  int pct = pctFromRaw(raw);
+
+  // Optional smoothing
+  if (soilEMA < 0.0f) soilEMA = pct;
+  soilEMA = EMA_ALPHA * pct + (1.0f - EMA_ALPHA) * soilEMA;
+  currentSoilMoisturePct = constrain((int)roundf(soilEMA), 0, 100);
+
+  Serial.printf("🌱 Soil RAW: %d | PCT(cal): %d%% [dry=%d, wet=%d]\n",
+                raw, currentSoilMoisturePct, soilCal.dryRaw, soilCal.wetRaw);
+  Serial.printf("   Presence=%s Fault=%s\n",
+                soilPresent ? "YES" : "NO", soilFault ? "YES" : "NO");
 }
 
+// Hysteresis pump logic (prefers percent, falls back to raw)
+void applyPumpLogic() {
+  bool newPump = currentPumpStatus;
+
+  if (remotePumpControl) {
+    // Handled by checkRemoteCommands()
+    return;
+  }
+
+  if (usePctControl) {
+    // If sensor faulty or absent, fail-safe: do NOT run pump
+    if (soilFault || !soilPresent) {
+      newPump = false;
+    } else {
+      // Hysteresis
+      if (!pumpLatchedOn && currentSoilMoisturePct <= moistureLowPct) {
+        pumpLatchedOn = true;
+      }
+      if (pumpLatchedOn && currentSoilMoisturePct >= moistureHighPct) {
+        pumpLatchedOn = false;
+      }
+      newPump = pumpLatchedOn;
+    }
+  } else {
+    // Legacy raw threshold (no hysteresis)
+    newPump = (currentSoilMoistureRaw > legacyMoistureThresholdRaw);
+  }
+
+  if (newPump != currentPumpStatus) {
+    currentPumpStatus = newPump;
+    digitalWrite(PUMP_RELAY_PIN, newPump ? LOW : HIGH);
+    Serial.println(String("💦 PUMP: ") + (newPump ? "ON" : "OFF") +
+                   String(usePctControl ? " (PCT control)" : " (RAW control)"));
+  }
+
+  // Bulb: keep your prior behavior (manual on unless remote)
+  if (!remoteBulbControl) {
+    if (!currentBulbStatus) {
+      currentBulbStatus = true;
+      digitalWrite(BULB_RELAY_PIN, LOW); // ON
+      Serial.println("💡 BULB: Forced ON (Manual Mode)");
+    }
+  }
+}
+
+// ---------------- Firebase update ----------------
 void updateFirebase() {
   if (!Firebase.ready()) {
-    Serial.println("⚠️ Firebase not ready, skipping update");
     firebaseConnected = false;
     return;
   }
-  
+
   Serial.println("📤 Updating Firebase...");
-  bool allUpdatesSuccessful = true;
-  
-  // Update sensor data
-  if (!Firebase.RTDB.setFloat(&fbdo, "/sensors/temperature", currentTemperature)) {
-    Serial.print("❌ Failed to update temperature: ");
-    Serial.println(fbdo.errorReason().c_str());
-    allUpdatesSuccessful = false;
-  }
-  
-  if (!Firebase.RTDB.setFloat(&fbdo, "/sensors/humidity", currentHumidity)) {
-    Serial.print("❌ Failed to update humidity: ");
-    Serial.println(fbdo.errorReason().c_str());
-    allUpdatesSuccessful = false;
-  }
-  
-  if (!Firebase.RTDB.setInt(&fbdo, "/sensors/soilMoisture", currentSoilMoisture)) {
-    Serial.print("❌ Failed to update soil moisture: ");
-    Serial.println(fbdo.errorReason().c_str());
-    allUpdatesSuccessful = false;
-  }
-  
-  // Calculate and update soil moisture percentage
-  int moisturePercent = map(currentSoilMoisture, 4095, 0, 0, 100);
-  moisturePercent = constrain(moisturePercent, 0, 100);
-  if (!Firebase.RTDB.setInt(&fbdo, "/sensors/soilMoisturePercent", moisturePercent)) {
-    Serial.print("❌ Failed to update soil moisture percentage: ");
-    Serial.println(fbdo.errorReason().c_str());
-    allUpdatesSuccessful = false;
-  }
-  
-  // Update actuator status
-  if (!Firebase.RTDB.setBool(&fbdo, "/actuators/pumpStatus", currentPumpStatus)) {
-    Serial.print("❌ Failed to update pump status: ");
-    Serial.println(fbdo.errorReason().c_str());
-    allUpdatesSuccessful = false;
-  }
-  
-  // Update bulb status
-  if (!Firebase.RTDB.setBool(&fbdo, "/actuators/bulbStatus", currentBulbStatus)) {
-    Serial.print("❌ Failed to update bulb status: ");
-    Serial.println(fbdo.errorReason().c_str());
-    allUpdatesSuccessful = false;
-  }
-  
-  // Update control modes
-  Firebase.RTDB.setString(&fbdo, "/controls/pumpMode", remotePumpControl ? "remote" : "auto");
+
+  bool ok = true;
+  ok &= Firebase.RTDB.setFloat(&fbdo, "/sensors/temperature", currentTemperature);
+  ok &= Firebase.RTDB.setFloat(&fbdo, "/sensors/humidity", currentHumidity);
+  ok &= Firebase.RTDB.setInt(&fbdo,   "/sensors/soilMoisture", currentSoilMoistureRaw);
+  ok &= Firebase.RTDB.setInt(&fbdo,   "/sensors/soilMoisturePercent", currentSoilMoisturePct);
+  ok &= Firebase.RTDB.setBool(&fbdo,  "/sensors/soilPresent", soilPresent);
+  ok &= Firebase.RTDB.setBool(&fbdo,  "/sensors/soilFault", soilFault);
+
+  ok &= Firebase.RTDB.setBool(&fbdo, "/actuators/pumpStatus", currentPumpStatus);
+  ok &= Firebase.RTDB.setBool(&fbdo, "/actuators/bulbStatus", currentBulbStatus);
+
+  Firebase.RTDB.setString(&fbdo, "/controls/pumpMode", remotePumpControl ? "remote" : (usePctControl ? "auto_pct" : "auto_raw"));
   Firebase.RTDB.setString(&fbdo, "/controls/bulbMode", remoteBulbControl ? "remote" : "manual");
-  
-  // Update system status
+
   Firebase.RTDB.setString(&fbdo, "/system/lastUpdate", String(millis()));
   Firebase.RTDB.setBool(&fbdo, "/system/deviceOnline", true);
-  Firebase.RTDB.setString(&fbdo, "/system/uptime", String(millis() / 1000) + " seconds");
-  
-  if (allUpdatesSuccessful) {
-    Serial.println("✅ Firebase update completed successfully!");
-    Serial.println("📊 Data uploaded:");
-    Serial.println("   🌡️ Temperature: " + String(currentTemperature, 1) + "°C");
-    Serial.println("   💧 Humidity: " + String(currentHumidity, 1) + "%");
-    Serial.println("   🌱 Soil: " + String(moisturePercent) + "% (" + String(currentSoilMoisture) + ")");
-    Serial.println("   💦 Pump: " + String(currentPumpStatus ? "ON" : "OFF") + " (" + String(remotePumpControl ? "REMOTE" : "AUTO") + ")");
-    Serial.println("   💡 Bulb: " + String(currentBulbStatus ? "ON" : "OFF") + " (" + String(remoteBulbControl ? "REMOTE" : "MANUAL") + ")");
+  Firebase.RTDB.setString(&fbdo, "/system/uptime", String(millis()/1000) + " s");
+
+  if (ok) {
+    Serial.println("✅ Firebase update OK");
   } else {
-    Serial.println("⚠️ Some Firebase updates failed - check connection");
+    Serial.print("⚠️ Update partial fail: "); Serial.println(fbdo.errorReason());
   }
-  
-  Serial.println("================================================");
 }
 
+// ---------------- Remote commands & calibration ----------------
 void checkRemoteCommands() {
-  if (!Firebase.ready()) {
-    Serial.println("🔍 Firebase not ready for remote commands");
-    return;
-  }
-  
-  Serial.println("🔍 Checking for remote commands...");
-  
-  // Check if remote control is enabled
-  if (Firebase.RTDB.getBool(&fbdo, "/controls/remoteControlEnabled")) {
-    if (fbdo.dataType() == "boolean") {
-      bool newRemoteControlEnabled = fbdo.boolData();
-      if (newRemoteControlEnabled != remoteControlEnabled) {
-        remoteControlEnabled = newRemoteControlEnabled;
-        Serial.println("🔄 Remote control master switch: " + String(remoteControlEnabled ? "ENABLED" : "DISABLED"));
-      }
-    }
-  } else {
-    Serial.println("⚠️ Failed to read remoteControlEnabled: " + fbdo.errorReason());
-  }
-  
+  if (!Firebase.ready()) return;
+  Serial.println("🔍 Checking remote commands...");
+
+  // Master switch
+  if (Firebase.RTDB.getBool(&fbdo, "/controls/remoteControlEnabled") && fbdo.dataType()=="boolean")
+    remoteControlEnabled = fbdo.boolData();
+
   if (!remoteControlEnabled) {
-    // If remote control is disabled, set everything to auto/manual mode
     if (remotePumpControl || remoteBulbControl) {
-      remotePumpControl = false;
-      remoteBulbControl = false;
-      Serial.println("📴 Remote control disabled - switching to auto/manual modes");
+      remotePumpControl = false; remoteBulbControl = false;
+      Serial.println("📴 Remote disabled -> auto/manual");
     }
     return;
   }
-  
-  // Check pump remote control status
-  if (Firebase.RTDB.getBool(&fbdo, "/controls/remotePumpControl")) {
-    if (fbdo.dataType() == "boolean") {
-      bool newRemotePumpControl = fbdo.boolData();
-      if (newRemotePumpControl != remotePumpControl) {
-        remotePumpControl = newRemotePumpControl;
-        Serial.println("🔄 Pump control mode changed to: " + String(remotePumpControl ? "REMOTE" : "AUTO"));
-      }
-    }
-  } else {
-    Serial.println("⚠️ Failed to read remotePumpControl: " + fbdo.errorReason());
-  }
-  
-  // Check bulb remote control status
-  if (Firebase.RTDB.getBool(&fbdo, "/controls/remoteBulbControl")) {
-    if (fbdo.dataType() == "boolean") {
-      bool newRemoteBulbControl = fbdo.boolData();
-      if (newRemoteBulbControl != remoteBulbControl) {
-        remoteBulbControl = newRemoteBulbControl;
-        Serial.println("🔄 Bulb control mode changed to: " + String(remoteBulbControl ? "REMOTE" : "MANUAL"));
-      }
-    }
-  } else {
-    Serial.println("⚠️ Failed to read remoteBulbControl: " + fbdo.errorReason());
-  }
-  
-  // If pump is in remote control mode, check for manual commands
+
+  if (Firebase.RTDB.getBool(&fbdo, "/controls/remotePumpControl") && fbdo.dataType()=="boolean")
+    remotePumpControl = fbdo.boolData();
+
+  if (Firebase.RTDB.getBool(&fbdo, "/controls/remoteBulbControl") && fbdo.dataType()=="boolean")
+    remoteBulbControl = fbdo.boolData();
+
+  // Manual pump command when remote
   if (remotePumpControl) {
-    if (Firebase.RTDB.getBool(&fbdo, "/controls/manualPumpCommand")) {
-      if (fbdo.dataType() == "boolean") {
-        bool newPumpCommand = fbdo.boolData();
-        Serial.println("📱 Read pump command from Firebase: " + String(newPumpCommand ? "ON" : "OFF"));
-        if (newPumpCommand != currentPumpStatus) {
-          currentPumpStatus = newPumpCommand;
-          Serial.println("🔄 Executing remote pump command: " + String(currentPumpStatus ? "ON" : "OFF"));
-          
-          // Apply the command immediately
-          if (currentPumpStatus) {
-            digitalWrite(PUMP_RELAY_PIN, LOW); // Turn ON Pump (active LOW)
-            Serial.println("✅ Pump relay set to LOW (ON)");
-          } else {
-            digitalWrite(PUMP_RELAY_PIN, HIGH); // Turn OFF Pump
-            Serial.println("✅ Pump relay set to HIGH (OFF)");
-          }
-        }
+    if (Firebase.RTDB.getBool(&fbdo, "/controls/manualPumpCommand") && fbdo.dataType()=="boolean") {
+      bool cmd = fbdo.boolData();
+      if (cmd != currentPumpStatus) {
+        currentPumpStatus = cmd;
+        digitalWrite(PUMP_RELAY_PIN, cmd ? LOW : HIGH);
+        Serial.println(String("🔄 Remote PUMP: ") + (cmd ? "ON" : "OFF"));
       }
-    } else {
-      Serial.println("⚠️ Failed to read manualPumpCommand: " + fbdo.errorReason());
     }
   }
-  
-  // If bulb is in remote control mode, check for manual commands
+
+  // Manual bulb command when remote
   if (remoteBulbControl) {
-    if (Firebase.RTDB.getBool(&fbdo, "/controls/manualBulbCommand")) {
-      if (fbdo.dataType() == "boolean") {
-        bool newBulbCommand = fbdo.boolData();
-        Serial.println("📱 Read bulb command from Firebase: " + String(newBulbCommand ? "ON" : "OFF"));
-        if (newBulbCommand != currentBulbStatus) {
-          currentBulbStatus = newBulbCommand;
-          Serial.println("🔄 Executing remote bulb command: " + String(currentBulbStatus ? "ON" : "OFF"));
-          
-          // Apply the command immediately
-          if (currentBulbStatus) {
-            digitalWrite(BULB_RELAY_PIN, LOW); // Turn ON Bulb (active LOW)
-            Serial.println("✅ Bulb relay set to LOW (ON)");
-          } else {
-            digitalWrite(BULB_RELAY_PIN, HIGH); // Turn OFF Bulb
-            Serial.println("✅ Bulb relay set to HIGH (OFF)");
-          }
-        } else {
-          Serial.println("ℹ️ Bulb command unchanged: " + String(currentBulbStatus ? "ON" : "OFF"));
+    if (Firebase.RTDB.getBool(&fbdo, "/controls/manualBulbCommand") && fbdo.dataType()=="boolean") {
+      bool cmd = fbdo.boolData();
+      if (cmd != currentBulbStatus) {
+        currentBulbStatus = cmd;
+        digitalWrite(BULB_RELAY_PIN, cmd ? LOW : HIGH);
+        Serial.println(String("🔄 Remote BULB: ") + (cmd ? "ON" : "OFF"));
+      }
+    }
+  }
+
+  // Thresholds / modes
+  if (Firebase.RTDB.getInt(&fbdo, "/settings/moistureLowPct") && fbdo.dataType()=="int")
+    moistureLowPct = constrain(fbdo.intData(), 0, 100);
+  if (Firebase.RTDB.getInt(&fbdo, "/settings/moistureHighPct") && fbdo.dataType()=="int")
+    moistureHighPct = constrain(fbdo.intData(), 0, 100);
+  if (Firebase.RTDB.getBool(&fbdo, "/settings/usePctControl") && fbdo.dataType()=="boolean")
+    usePctControl = fbdo.boolData();
+
+  // ====== NEW: Remote calibration ======
+  if (Firebase.RTDB.getString(&fbdo, "/controls/calibrate") && fbdo.dataType()=="string") {
+    String mode = fbdo.stringData(); // "DRY", "WET", "NONE"
+    mode.toUpperCase();
+
+    if (mode == "DRY" || mode == "WET") {
+      Serial.println("🧪 Calibration requested: " + mode + " (sampling 64x)");
+      // Take robust median of 64 samples
+      const int N = 64;
+      int buf[N];
+      for (int i=0;i<N;i++){ buf[i]=analogRead(SOIL_PIN); delay(10); }
+      // Simple selection: partial sort for median
+      // For simplicity, reuse medianOf on first 33 entries twice
+      int med = 0;
+      // A quick full median (N is small)
+      for (int i=0;i<N-1;i++){
+        for (int j=i+1;j<N;j++){
+          if (buf[j]<buf[i]) { int t=buf[i]; buf[i]=buf[j]; buf[j]=t; }
         }
       }
-    } else {
-      Serial.println("⚠️ Failed to read manualBulbCommand: " + fbdo.errorReason());
-    }
-  }
-  
-  // Check for threshold updates
-  if (Firebase.RTDB.getInt(&fbdo, "/settings/moistureThreshold")) {
-    if (fbdo.dataType() == "int") {
-      int newThreshold = fbdo.intData();
-      if (newThreshold != moistureThreshold && newThreshold > 0 && newThreshold < 4095) {
-        moistureThreshold = newThreshold;
-        Serial.println("🔄 Moisture threshold updated to: " + String(moistureThreshold));
+      med = (N%2==0)? ((buf[N/2-1]+buf[N/2])/2) : buf[N/2];
+
+      if (mode == "DRY") {
+        soilCal.dryRaw = med;
+        Firebase.RTDB.setInt(&fbdo, "/settings/soilCalibration/dryRaw", soilCal.dryRaw);
+        Firebase.RTDB.setString(&fbdo, "/controls/calibrate", "DONE-DRY");
+        Serial.printf("✅ DRY calibrated to %d\n", soilCal.dryRaw);
+      } else {
+        soilCal.wetRaw = med;
+        Firebase.RTDB.setInt(&fbdo, "/settings/soilCalibration/wetRaw", soilCal.wetRaw);
+        Firebase.RTDB.setString(&fbdo, "/controls/calibrate", "DONE-WET");
+        Serial.printf("✅ WET calibrated to %d\n", soilCal.wetRaw);
+      }
+
+      // Keep ordering sane
+      if (soilCal.dryRaw < soilCal.wetRaw) {
+        int tmp=soilCal.dryRaw; soilCal.dryRaw=soilCal.wetRaw; soilCal.wetRaw=tmp;
+        Firebase.RTDB.setInt(&fbdo, "/settings/soilCalibration/dryRaw", soilCal.dryRaw);
+        Firebase.RTDB.setInt(&fbdo, "/settings/soilCalibration/wetRaw", soilCal.wetRaw);
       }
     }
-  } else {
-    Serial.println("⚠️ Failed to read moistureThreshold: " + fbdo.errorReason());
   }
-  
-  Serial.println("✅ Remote command check completed");
+
+  Serial.println("✅ Remote check done");
 }
 
-// Note: tokenStatusCallback is already defined in TokenHelper.h, so we don't need to define it here
+// ---------------- Utilities ----------------
+int medianOf(int *arr, int n) {
+  // in-place selection sort (n small)
+  for (int i=0;i<n-1;i++){
+    for (int j=i+1;j<n;j++){
+      if (arr[j] < arr[i]) { int t=arr[i]; arr[i]=arr[j]; arr[j]=t; }
+    }
+  }
+  if (n%2==0) return (arr[n/2-1] + arr[n/2]) / 2;
+  return arr[n/2];
+}
+
+int readSoilRawMedian() {
+  int buf[SOIL_SAMPLES];
+  for (int i=0;i<SOIL_SAMPLES;i++) {
+    buf[i] = analogRead(SOIL_PIN);
+    delay(8);
+  }
+  return medianOf(buf, SOIL_SAMPLES);
+}
+
+// Linear mapping using calibration points (dry->0%, wet->100%)
+int pctFromRaw(int raw) {
+  // Ensure dryRaw > wetRaw (enforced earlier)
+  long num = (long)soilCal.dryRaw - (long)raw;
+  long den = (long)soilCal.dryRaw - (long)soilCal.wetRaw;
+  if (den == 0) den = 1;
+  long pct = (num * 100L) / den;
+  // clamp
+  if (pct < 0) pct = 0;
+  if (pct > 100) pct = 100;
+  return (int)pct;
+}
