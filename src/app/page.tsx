@@ -63,75 +63,77 @@ const useFirebaseData = () => {
     const controlsRef = ref(database, 'controls');
     const connectedRef = ref(database, '.info/connected');
 
-    const listeners = [
-      onValue(sensorsRef, (snapshot) => {
-        const value = snapshot.val();
-        if (value) {
-          setSensors({
-            temperature: value.temperature || 0,
-            humidity: value.humidity || 0,
-            soilMoisture: value.soilMoisture || 0,
-            soilMoisturePercent: value.soilMoisturePercent || 0,
-          });
-          handleInitialLoad();
-        }
-      }, (err) => {
-        console.error("Firebase sensor read error:", err);
-        setError("Failed to read sensor data.");
-      }),
-      onValue(actuatorsRef, (snapshot) => {
-        const value = snapshot.val();
-        if (value) {
-          setActuators({
-            pumpStatus: !!value.pumpStatus,
-            bulbStatus: !!value.bulbStatus,
-          });
-        }
-      }, (err) => {
-        console.error("Firebase actuator read error:", err);
-        setError("Failed to read actuator data.");
-      }),
-      onValue(systemRef, (snapshot) => {
-        const value = snapshot.val();
-        if (value) {
-          setSystem({
-            deviceOnline: !!value.deviceOnline,
-          });
-        }
-      }, (err) => {
-        console.error("Firebase system read error:", err);
-        setError("Failed to read system data.");
-      }),
-      onValue(controlsRef, (snapshot) => {
-        const value = snapshot.val();
-        if (value) {
-          setControls({
-            remoteControlEnabled: !!value.remoteControlEnabled,
-            remotePumpControl: !!value.remotePumpControl,
-            remoteBulbControl: !!value.remoteBulbControl,
-          });
-        }
-      }, (err) => {
-        console.error("Firebase controls read error:", err);
-        setError("Failed to read control settings.");
-      }),
-      onValue(connectedRef, (snapshot) => {
-        const connected = snapshot.val() === true;
-        setIsConnected(connected);
-        if (!connected) {
-          setError("Connection to Firebase lost. Retrying...");
-        } else if (error === "Connection to Firebase lost. Retrying...") {
-          setError(null);
-        }
-      })
-    ];
+    const onSensorsValue = onValue(sensorsRef, (snapshot) => {
+      const value = snapshot.val();
+      if (value) {
+        setSensors({
+          temperature: value.temperature || 0,
+          humidity: value.humidity || 0,
+          soilMoisture: value.soilMoisture || 0,
+          soilMoisturePercent: value.soilMoisturePercent || 0,
+        });
+        handleInitialLoad();
+      }
+    }, (err) => {
+      console.error("Firebase sensor read error:", err);
+      setError("Failed to read sensor data.");
+    });
+
+    const onActuatorsValue = onValue(actuatorsRef, (snapshot) => {
+      const value = snapshot.val();
+      if (value) {
+        setActuators({
+          pumpStatus: !!value.pumpStatus,
+          bulbStatus: !!value.bulbStatus,
+        });
+      }
+    }, (err) => {
+      console.error("Firebase actuator read error:", err);
+      setError("Failed to read actuator data.");
+    });
+
+    const onSystemValue = onValue(systemRef, (snapshot) => {
+      const value = snapshot.val();
+      if (value) {
+        setSystem({
+          deviceOnline: !!value.deviceOnline,
+        });
+      }
+    }, (err) => {
+      console.error("Firebase system read error:", err);
+      setError("Failed to read system data.");
+    });
+
+    const onControlsValue = onValue(controlsRef, (snapshot) => {
+      const value = snapshot.val();
+      if (value) {
+        setControls({
+          remoteControlEnabled: !!value.remoteControlEnabled,
+          remotePumpControl: !!value.remotePumpControl,
+          remoteBulbControl: !!value.remoteBulbControl,
+        });
+      }
+    }, (err) => {
+      console.error("Firebase controls read error:", err);
+      setError("Failed to read control settings.");
+    });
+
+    const onConnectedValue = onValue(connectedRef, (snapshot) => {
+      const connected = snapshot.val() === true;
+      setIsConnected(connected);
+      if (!connected) {
+        setError("Connection to Firebase lost. Retrying...");
+      } else if (error === "Connection to Firebase lost. Retrying...") {
+        setError(null);
+      }
+    });
 
     return () => {
-      off(sensorsRef);
-      off(actuatorsRef);
-      off(systemRef);
-      off(controlsRef);
-      off(connectedRef);
+      off(sensorsRef, 'value', onSensorsValue);
+      off(actuatorsRef, 'value', onActuatorsValue);
+      off(systemRef, 'value', onSystemValue);
+      off(controlsRef, 'value', onControlsValue);
+      off(connectedRef, 'value', onConnectedValue);
     };
   }, [error]);
 
@@ -162,16 +164,13 @@ const StatusIndicator = ({ isConnected, isLoading, error }: { isConnected: boole
 
 
 export default function DashboardPage() {
-  const { sensors, actuators, controls, system, isConnected, isLoading, error } = useFirebaseData();
+  const { sensors, actuators, controls, isConnected, isLoading, error } = useFirebaseData();
   const [insights, setInsights] = useState<string[]>([]);
 
   const handleNewInsight = (insight: string) => {
     setInsights(prev => [insight, ...prev].slice(0, 10)); // Keep last 10 insights
   };
   
-  const isBulbControlDisabled = isLoading || !controls.remoteControlEnabled;
-  const isPumpControlDisabled = isLoading || !controls.remoteControlEnabled;
-
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
       <main className="flex-1 p-4 sm:p-6 lg:p-8">
@@ -200,7 +199,7 @@ export default function DashboardPage() {
               unit="%"
               isLoading={isLoading}
             />
-             <div className="lg:col-span-1 md:col-span-2 grid grid-cols-2 gap-6">
+             <div className="lg:col-span-1 md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <DeviceControlCard
                     title="Grow Light"
                     icon={Lightbulb}

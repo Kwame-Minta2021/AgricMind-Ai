@@ -24,13 +24,10 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
     const isBulb = title === 'Grow Light';
 
     if (isBulb) {
-      // For the bulb, we need to enable remote mode and send a command
       await set(ref(database, 'controls/remoteBulbControl'), true);
       await new Promise(resolve => setTimeout(resolve, 50));
       await set(ref(database, 'controls/manualBulbCommand'), checked);
     } else {
-      // For the pump, the AI and manual logic directly sets the actuator status
-      // We will also ensure it's in remote mode to override auto-logic
        await set(ref(database, 'controls/remotePumpControl'), true);
        await new Promise(resolve => setTimeout(resolve, 50));
        await set(ref(database, 'actuators/pumpStatus'), checked);
@@ -48,25 +45,25 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
   };
   
   return (
-    <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 h-full bg-card/80 backdrop-blur-sm">
+    <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 h-full flex flex-col bg-card/80 backdrop-blur-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
-      <CardContent>
-        <div className="flex items-center justify-between space-x-2">
-           <div className="flex flex-col space-y-1">
-            <span className={cn("font-medium text-lg", isChecked ? 'text-primary' : 'text-muted-foreground')}>{isChecked ? 'ON' : 'OFF'}</span>
-            <span className="text-xs text-muted-foreground">{getStatusDescription()}</span>
+      <CardContent className="flex flex-col justify-between flex-grow">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-1">
+            <span className={cn("font-medium text-xl", isChecked ? 'text-primary' : 'text-muted-foreground')}>{isChecked ? 'ON' : 'OFF'}</span>
+            <div className="text-xs text-muted-foreground h-4">{getStatusDescription()}</div>
           </div>
-
-          <div className="flex flex-col items-end space-y-1">
+          
+          <div className="flex items-center">
             <Button
               onClick={() => handleCheckedChange(!isChecked)}
               disabled={isMasterDisabled}
               variant={isChecked ? 'destructive' : 'default'}
               size="sm"
-              className="w-24"
+              className="w-full sm:w-auto"
             >
               <Power className="mr-2 h-4 w-4" />
               {isChecked ? 'Turn OFF' : 'Turn ON'}
