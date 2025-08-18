@@ -68,7 +68,7 @@ export function CropManagement({ onNewInsight, sensorData }: CropManagementProps
   };
 
   return (
-    <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 bg-card/80 backdrop-blur-sm">
+    <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 bg-card/80 backdrop-blur-sm lg:col-span-1">
       <CardHeader>
         <div className="flex items-center gap-2">
           <BrainCircuit className="w-6 h-6 text-primary" />
