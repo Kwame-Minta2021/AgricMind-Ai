@@ -2,7 +2,7 @@
 "use client";
 
 import type { LucideIcon } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { database } from '@/lib/firebase';
 import { ref, set } from "firebase/database";
@@ -50,27 +50,22 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
-      <CardContent className="flex flex-col justify-between flex-grow">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="space-y-1">
-            <span className={cn("font-medium text-xl", isChecked ? 'text-primary' : 'text-muted-foreground')}>{isChecked ? 'ON' : 'OFF'}</span>
-            <div className="text-xs text-muted-foreground h-4">{getStatusDescription()}</div>
-          </div>
-          
-          <div className="flex items-center">
-            <Button
-              onClick={() => handleCheckedChange(!isChecked)}
-              disabled={isMasterDisabled}
-              variant={isChecked ? 'destructive' : 'default'}
-              size="sm"
-              className="w-full sm:w-auto"
-            >
-              <Power className="mr-2 h-4 w-4" />
-              {isChecked ? 'Turn OFF' : 'Turn ON'}
-            </Button>
-          </div>
-        </div>
+      <CardContent className="flex-grow flex flex-col justify-center pb-2">
+         <div className={cn("font-bold text-3xl text-center", isChecked ? 'text-primary' : 'text-muted-foreground')}>{isChecked ? 'ON' : 'OFF'}</div>
       </CardContent>
+      <CardFooter className="flex flex-col gap-2 pt-2">
+        <Button
+          onClick={() => handleCheckedChange(!isChecked)}
+          disabled={isMasterDisabled}
+          variant={isChecked ? 'destructive' : 'default'}
+          size="sm"
+          className="w-full"
+        >
+          <Power className="mr-2 h-4 w-4" />
+          {isChecked ? 'Turn OFF' : 'Turn ON'}
+        </Button>
+        <div className="text-xs text-muted-foreground h-4 text-center w-full">{getStatusDescription()}</div>
+      </CardFooter>
     </Card>
   );
 }
