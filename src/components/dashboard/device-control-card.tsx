@@ -25,9 +25,9 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
     const isPump = title === 'Water Pump';
 
     if (isBulb) {
-      await set(ref(database, 'actuators/bulbStatus'), checked);
+      await set(ref(database, 'controls/manualBulbCommand'), checked);
     } else if (isPump) {
-      await set(ref(database, 'actuators/pumpStatus'), checked);
+      await set(ref(database, 'controls/manualPumpCommand'), checked);
     }
   };
   

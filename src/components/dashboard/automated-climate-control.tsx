@@ -32,8 +32,9 @@ export function AutomatedClimateControl({ currentBulbStatus, onNewInsight, curre
       
       onNewInsight(`AI Climate Control: ${result.reason}`);
       
+      // The AI now writes to the manual command path to control the bulb
       if (result.newBulbStatus !== currentBulbStatus) {
-        await set(ref(database, 'actuators/bulbStatus'), result.newBulbStatus);
+        await set(ref(database, 'controls/manualBulbCommand'), result.newBulbStatus);
       }
       
     } catch (error) {
