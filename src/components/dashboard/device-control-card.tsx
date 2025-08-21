@@ -24,13 +24,13 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
     const isBulb = title === 'Grow Light';
 
     if (isBulb) {
+      // Bulb control requires setting remote mode first, then sending a command.
       await set(ref(database, 'controls/remoteBulbControl'), true);
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 50)); // Give ESP32 time to switch mode
       await set(ref(database, 'controls/manualBulbCommand'), checked);
     } else {
-       await set(ref(database, 'controls/remotePumpControl'), true);
-       await new Promise(resolve => setTimeout(resolve, 50));
-       await set(ref(database, 'actuators/pumpStatus'), checked);
+      // Pump control is direct: just set the actuator status.
+      await set(ref(database, 'actuators/pumpStatus'), checked);
     }
   };
   
