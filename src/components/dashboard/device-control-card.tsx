@@ -22,14 +22,17 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
 
   const handleCheckedChange = async (checked: boolean) => {
     const isBulb = title === 'Grow Light';
+    const isPump = title === 'Water Pump';
 
     if (isBulb) {
-      // Bulb control requires setting remote mode first, then sending a command.
       await set(ref(database, 'controls/remoteBulbControl'), true);
-      await new Promise(resolve => setTimeout(resolve, 50)); // Give ESP32 time to switch mode
+      await new Promise(resolve => setTimeout(resolve, 50));
       await set(ref(database, 'controls/manualBulbCommand'), checked);
-    } else {
-      // Pump control is direct: just set the actuator status.
+    } else if (isPump) {
+      // For the pump, we enter remote mode and then set the status.
+      // This prevents the auto-irrigation AI from overriding the manual setting.
+      await set(ref(database, 'controls/remotePumpControl'), true);
+      await new Promise(resolve => setTimeout(resolve, 50));
       await set(ref(database, 'actuators/pumpStatus'), checked);
     }
   };
@@ -39,7 +42,7 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
   const getStatusDescription = () => {
     if (isMasterDisabled) return "Remote master disabled";
     if (isRemoteControlled) {
-      return <span className="text-primary font-semibold">Remote Mode</span>;
+      return <span className="text-primary font-semibold">Manual Override</span>;
     }
     return title === 'Grow Light' ? "Manual Mode" : "Auto Mode";
   };

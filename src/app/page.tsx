@@ -223,6 +223,7 @@ export default function DashboardPage() {
               currentPumpStatus={actuators.pumpStatus}
               currentSoilMoisture={sensors.soilMoisturePercent}
               onNewInsight={handleNewInsight}
+              isRemoteControlled={controls.remotePumpControl}
             />
              <AutomatedClimateControl
               currentBulbStatus={actuators.bulbStatus}
