@@ -31,17 +31,10 @@ interface SystemData {
   deviceOnline: boolean;
 }
 
-interface ControlsData {
-  remoteControlEnabled: boolean;
-  remotePumpControl: boolean;
-  remoteBulbControl: boolean;
-}
-
 const useFirebaseData = () => {
   const [sensors, setSensors] = useState<SensorData>({ temperature: 0, humidity: 0, soilMoisture: 0, soilMoisturePercent: 0 });
   const [actuators, setActuators] = useState<ActuatorData>({ pumpStatus: false, bulbStatus: false });
   const [system, setSystem] = useState<SystemData>({ deviceOnline: false });
-  const [controls, setControls] = useState<ControlsData>({ remoteControlEnabled: false, remotePumpControl: false, remoteBulbControl: false });
   const [isConnected, setIsConnected] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +52,6 @@ const useFirebaseData = () => {
     const sensorsRef = ref(database, 'sensors');
     const actuatorsRef = ref(database, 'actuators');
     const systemRef = ref(database, 'system');
-    const controlsRef = ref(database, 'controls');
     const connectedRef = ref(database, '.info/connected');
 
     const onSensorsValue = onValue(sensorsRef, (snapshot) => {
@@ -102,19 +94,6 @@ const useFirebaseData = () => {
       setError("Failed to read system data.");
     });
 
-    const onControlsValue = onValue(controlsRef, (snapshot) => {
-      const value = snapshot.val();
-      if (value) {
-        setControls({
-          remoteControlEnabled: !!value.remoteControlEnabled,
-          remotePumpControl: !!value.remotePumpControl,
-          remoteBulbControl: !!value.remoteBulbControl,
-        });
-      }
-    }, (err) => {
-      console.error("Firebase controls read error:", err);
-      setError("Failed to read control settings.");
-    });
 
     const onConnectedValue = onValue(connectedRef, (snapshot) => {
       const connected = snapshot.val() === true;
@@ -130,7 +109,6 @@ const useFirebaseData = () => {
       off(sensorsRef, 'value', onSensorsValue);
       off(actuatorsRef, 'value', onActuatorsValue);
       off(systemRef, 'value', onSystemValue);
-      off(controlsRef, 'value', onControlsValue);
       off(connectedRef, 'value', onConnectedValue);
     };
   }, [error]);
@@ -156,7 +134,7 @@ const useFirebaseData = () => {
 
   const deviceOnline = system.deviceOnline && isConnected;
   
-  return { sensors, actuators, controls, system, isConnected: deviceOnline, isLoading, error };
+  return { sensors, actuators, system, isConnected: deviceOnline, isLoading, error };
 };
 
 const StatusIndicator = ({ isConnected, isLoading, error }: { isConnected: boolean, isLoading: boolean, error: string | null }) => (
@@ -181,7 +159,7 @@ const StatusIndicator = ({ isConnected, isLoading, error }: { isConnected: boole
 
 
 export default function DashboardPage() {
-  const { sensors, actuators, controls, isConnected, isLoading, error } = useFirebaseData();
+  const { sensors, actuators, isConnected, isLoading, error } = useFirebaseData();
   const [insights, setInsights] = useState<string[]>([]);
 
   const handleNewInsight = (insight: string) => {
@@ -222,16 +200,12 @@ export default function DashboardPage() {
                     icon={Lightbulb}
                     isChecked={actuators.bulbStatus}
                     isLoading={isLoading}
-                    remoteControlEnabled={controls.remoteControlEnabled}
-                    isRemoteControlled={controls.remoteBulbControl}
                 />
                 <DeviceControlCard
                     title="Water Pump"
                     icon={CloudRain}
                     isChecked={actuators.pumpStatus}
                     isLoading={isLoading}
-                    remoteControlEnabled={controls.remoteControlEnabled}
-                    isRemoteControlled={controls.remotePumpControl}
                 />
             </div>
           </div>

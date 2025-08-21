@@ -2,7 +2,7 @@
 "use client";
 
 import type { LucideIcon } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { database } from '@/lib/firebase';
 import { ref, set } from "firebase/database";
@@ -14,11 +14,9 @@ interface DeviceControlCardProps {
   icon: LucideIcon;
   isChecked: boolean; // Actual status from /actuators
   isLoading?: boolean;
-  remoteControlEnabled: boolean; // Master remote control
-  isRemoteControlled: boolean; // Device-specific remote from /controls
 }
 
-export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, remoteControlEnabled, isRemoteControlled }: DeviceControlCardProps) {
+export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading }: DeviceControlCardProps) {
 
   const handleCheckedChange = async (checked: boolean) => {
     const isBulb = title === 'Grow Light';
@@ -31,14 +29,13 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
     }
   };
   
-  const isMasterDisabled = isLoading || !remoteControlEnabled;
-
   const getStatusDescription = () => {
-    if (isMasterDisabled) return "Remote master disabled";
     if (title === 'Water Pump') return "Manual Control";
-    
-    if (isRemoteControlled) {
-      return <span className="text-primary font-semibold">AI Controlled</span>;
+    if (isChecked) {
+        // This is a rough check to see if AI might be controlling it.
+        // A more robust solution would involve checking a dedicated AI control status flag if it existed.
+        const automatedClimateComponent = document.querySelector('[data-automation-active="true"]');
+        if (automatedClimateComponent) return <span className="text-primary font-semibold">AI Controlled</span>;
     }
     return "Manual Control";
   };
@@ -55,7 +52,7 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
       <CardFooter className="flex flex-col gap-2 pt-2">
         <Button
           onClick={() => handleCheckedChange(!isChecked)}
-          disabled={isMasterDisabled}
+          disabled={isLoading}
           variant={isChecked ? 'destructive' : 'default'}
           size="sm"
           className="w-full rounded-full"
