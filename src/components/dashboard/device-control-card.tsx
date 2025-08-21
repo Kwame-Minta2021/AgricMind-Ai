@@ -22,21 +22,18 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading }: D
     const isBulb = title === 'Grow Light';
     const isPump = title === 'Water Pump';
 
-    if (isBulb) {
-      await set(ref(database, 'controls/manualBulbCommand'), checked);
-    } else if (isPump) {
-      await set(ref(database, 'controls/manualPumpCommand'), checked);
+    try {
+        if (isBulb) {
+            await set(ref(database, 'controls/manualBulbCommand'), checked);
+        } else if (isPump) {
+            await set(ref(database, 'controls/manualPumpCommand'), checked);
+        }
+    } catch (error) {
+        console.error("Failed to update command:", error);
     }
   };
   
   const getStatusDescription = () => {
-    if (title === 'Water Pump') return "Manual Control";
-    if (isChecked) {
-        // This is a rough check to see if AI might be controlling it.
-        // A more robust solution would involve checking a dedicated AI control status flag if it existed.
-        const automatedClimateComponent = document.querySelector('[data-automation-active="true"]');
-        if (automatedClimateComponent) return <span className="text-primary font-semibold">AI Controlled</span>;
-    }
     return "Manual Control";
   };
   
