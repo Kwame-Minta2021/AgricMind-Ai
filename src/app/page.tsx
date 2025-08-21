@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ref, onValue, off, set } from "firebase/database";
 import { database } from '@/lib/firebase';
-import { Thermometer, Droplets, Waves, Lightbulb, CloudRain, Wifi, WifiOff, FlaskConical } from 'lucide-react';
+import { Thermometer, Droplets, Waves, Lightbulb, CloudRain, Wifi, WifiOff } from 'lucide-react';
 
 import { Header } from '@/components/dashboard/header';
 import { SensorCard } from '@/components/dashboard/sensor-card';
@@ -20,7 +20,6 @@ interface SensorData {
   humidity: number;
   soilMoisture: number; // raw ADC
   soilMoisturePercent: number; // percentage
-  soilNutrients: number; // PPM
 }
 
 interface ActuatorData {
@@ -39,7 +38,7 @@ interface ControlsData {
 }
 
 const useFirebaseData = () => {
-  const [sensors, setSensors] = useState<SensorData>({ temperature: 0, humidity: 0, soilMoisture: 0, soilMoisturePercent: 0, soilNutrients: 0 });
+  const [sensors, setSensors] = useState<SensorData>({ temperature: 0, humidity: 0, soilMoisture: 0, soilMoisturePercent: 0 });
   const [actuators, setActuators] = useState<ActuatorData>({ pumpStatus: false, bulbStatus: false });
   const [system, setSystem] = useState<SystemData>({ deviceOnline: false });
   const [controls, setControls] = useState<ControlsData>({ remoteControlEnabled: false, remotePumpControl: false, remoteBulbControl: false });
@@ -155,26 +154,6 @@ const useFirebaseData = () => {
     return () => clearInterval(intervalId);
   }, []);
 
-  // This effect will simulate the soil nutrient data
-  useEffect(() => {
-    const nutrientValues = [450, 620, 510, 700, 580];
-    let currentIndex = 0;
-
-    setSensors(prev => ({ ...prev, soilNutrients: nutrientValues[0] }));
-    
-    const intervalId = setInterval(() => {
-      currentIndex = (currentIndex + 1) % nutrientValues.length;
-      const newNutrientValue = nutrientValues[currentIndex];
-      setSensors(prev => ({
-        ...prev,
-        soilNutrients: newNutrientValue
-      }));
-    }, 180000); // Update every 3 minutes
-
-    return () => clearInterval(intervalId);
-  }, []);
-
-
   const deviceOnline = system.deviceOnline && isConnected;
   
   return { sensors, actuators, controls, system, isConnected: deviceOnline, isLoading, error };
@@ -237,15 +216,7 @@ export default function DashboardPage() {
               unit="%"
               isLoading={isLoading}
             />
-            <SensorCard
-              title="Soil Nutrients"
-              icon={FlaskConical}
-              value={sensors.soilNutrients}
-              unit="PPM"
-              isLoading={isLoading}
-              precision={0}
-            />
-             <div className="lg:col-span-2 md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
+             <div className="lg:col-span-1 md:col-span-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
                 <DeviceControlCard
                     title="Grow Light"
                     icon={Lightbulb}
