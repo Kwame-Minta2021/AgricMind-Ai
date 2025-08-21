@@ -29,10 +29,6 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
       await new Promise(resolve => setTimeout(resolve, 50));
       await set(ref(database, 'controls/manualBulbCommand'), checked);
     } else if (isPump) {
-      // For the pump, we enter remote mode and then set the status.
-      // This prevents the auto-irrigation AI from overriding the manual setting.
-      await set(ref(database, 'controls/remotePumpControl'), true);
-      await new Promise(resolve => setTimeout(resolve, 50));
       await set(ref(database, 'actuators/pumpStatus'), checked);
     }
   };
@@ -41,10 +37,12 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
 
   const getStatusDescription = () => {
     if (isMasterDisabled) return "Remote master disabled";
+    if (title === 'Water Pump') return "Manual Control";
+    
     if (isRemoteControlled) {
       return <span className="text-primary font-semibold">Manual Override</span>;
     }
-    return title === 'Grow Light' ? "Manual Mode" : "Auto Mode";
+    return "Manual Mode";
   };
   
   return (

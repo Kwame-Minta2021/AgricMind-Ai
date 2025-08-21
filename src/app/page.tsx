@@ -10,7 +10,6 @@ import { Header } from '@/components/dashboard/header';
 import { SensorCard } from '@/components/dashboard/sensor-card';
 import { DeviceControlCard } from '@/components/dashboard/device-control-card';
 import { CropManagement } from '@/components/dashboard/crop-management';
-import { AutomatedIrrigation } from '@/components/dashboard/automated-irrigation';
 import { AutomatedClimateControl } from '@/components/dashboard/automated-climate-control';
 import { InsightsPanel } from '@/components/dashboard/insights-panel';
 import { Badge } from '@/components/ui/badge';
@@ -79,7 +78,12 @@ const useFirebaseData = () => {
       const value = snapshot.val();
       if (value) {
         const rawSoilMoisture = value.soilMoisture || 0;
-        const soilMoisturePercent = mapSoilMoistureToPercent(rawSoilMoisture);
+        let soilMoisturePercent = mapSoilMoistureToPercent(rawSoilMoisture);
+
+        // Clamp the soil moisture to a maximum of 70%
+        if (soilMoisturePercent > 70) {
+          soilMoisturePercent = 70;
+        }
 
         setSensors({
           temperature: value.temperature || 0,
@@ -234,12 +238,6 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="mt-8 grid gap-8 md:grid-cols-1 lg:grid-cols-3 animate-in fade-in-0 slide-in-from-bottom-6 duration-700 delay-200">
-            <AutomatedIrrigation 
-              currentPumpStatus={actuators.pumpStatus}
-              currentSoilMoisture={sensors.soilMoisturePercent}
-              onNewInsight={handleNewInsight}
-              isRemoteControlled={controls.remotePumpControl}
-            />
              <AutomatedClimateControl
               currentBulbStatus={actuators.bulbStatus}
               currentTemperature={sensors.temperature}
