@@ -9,10 +9,11 @@ interface SensorCardProps {
   value?: number;
   unit: string;
   isLoading?: boolean;
+  precision?: number;
 }
 
-export function SensorCard({ title, icon: Icon, value, unit, isLoading }: SensorCardProps) {
-  const displayValue = value !== undefined ? value.toFixed(1) : '0.0';
+export function SensorCard({ title, icon: Icon, value, unit, isLoading, precision = 1 }: SensorCardProps) {
+  const displayValue = value !== undefined ? value.toFixed(precision) : '0.0';
   
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 bg-card/80 backdrop-blur-sm">
