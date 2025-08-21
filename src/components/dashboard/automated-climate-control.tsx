@@ -29,15 +29,13 @@ export function AutomatedClimateControl({ currentBulbStatus, onNewInsight, curre
         humidity: currentHumidity,
         bulbStatus: currentBulbStatus,
       });
-
-      if (result.newBulbStatus !== currentBulbStatus) {
-        // First, ensure the device is in remote mode.
-        await set(ref(database, 'controls/remoteBulbControl'), true);
-        await new Promise(resolve => setTimeout(resolve, 50));
-        // Then, send the on/off command.
-        await set(ref(database, 'controls/manualBulbCommand'), result.newBulbStatus);
-      }
+      
       onNewInsight(`AI Climate Control: ${result.reason}`);
+      
+      if (result.newBulbStatus !== currentBulbStatus) {
+        await set(ref(database, 'actuators/bulbStatus'), result.newBulbStatus);
+      }
+      
     } catch (error) {
       console.error("AI Error:", error);
        toast({

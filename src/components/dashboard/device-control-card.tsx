@@ -25,9 +25,7 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
     const isPump = title === 'Water Pump';
 
     if (isBulb) {
-      await set(ref(database, 'controls/remoteBulbControl'), true);
-      await new Promise(resolve => setTimeout(resolve, 50));
-      await set(ref(database, 'controls/manualBulbCommand'), checked);
+      await set(ref(database, 'actuators/bulbStatus'), checked);
     } else if (isPump) {
       await set(ref(database, 'actuators/pumpStatus'), checked);
     }
@@ -40,9 +38,9 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading, rem
     if (title === 'Water Pump') return "Manual Control";
     
     if (isRemoteControlled) {
-      return <span className="text-primary font-semibold">Manual Override</span>;
+      return <span className="text-primary font-semibold">AI Controlled</span>;
     }
-    return "Manual Mode";
+    return "Manual Control";
   };
   
   return (
