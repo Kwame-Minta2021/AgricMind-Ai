@@ -56,6 +56,18 @@ const useFirebaseData = () => {
     }
   };
 
+  const mapSoilMoistureToPercent = (rawValue: number) => {
+    const DRY_VALUE = 4095; // Represents 0% moisture
+    const WET_VALUE = 1000;  // Represents 100% moisture
+
+    if (rawValue >= DRY_VALUE) return 0;
+    if (rawValue <= WET_VALUE) return 100;
+
+    const percentage = 100 - ((rawValue - WET_VALUE) / (DRY_VALUE - WET_VALUE)) * 100;
+    return Math.round(Math.max(0, Math.min(100, percentage)));
+  };
+
+
   useEffect(() => {
     const sensorsRef = ref(database, 'sensors');
     const actuatorsRef = ref(database, 'actuators');
@@ -66,15 +78,13 @@ const useFirebaseData = () => {
     const onSensorsValue = onValue(sensorsRef, (snapshot) => {
       const value = snapshot.val();
       if (value) {
-        let soilMoisturePercent = value.soilMoisturePercent || 0;
-        if (soilMoisturePercent > 70) {
-          soilMoisturePercent = 70;
-        }
+        const rawSoilMoisture = value.soilMoisture || 0;
+        const soilMoisturePercent = mapSoilMoistureToPercent(rawSoilMoisture);
 
         setSensors({
           temperature: value.temperature || 0,
           humidity: value.humidity || 0,
-          soilMoisture: value.soilMoisture || 0,
+          soilMoisture: rawSoilMoisture,
           soilMoisturePercent: soilMoisturePercent,
         });
         handleInitialLoad();
