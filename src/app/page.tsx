@@ -148,7 +148,7 @@ const useFirebaseData = () => {
         ...prev,
         soilMoisturePercent: newMoistureValue
       }));
-    }, 2500); // Update every 2.5 seconds
+    }, 120000); // Update every 2 minutes
 
     return () => clearInterval(intervalId);
   }, []);
