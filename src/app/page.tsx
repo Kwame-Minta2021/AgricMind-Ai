@@ -55,19 +55,6 @@ const useFirebaseData = () => {
     }
   };
 
-  const mapSoilMoistureToPercent = (rawValue: number) => {
-    const DRY_VALUE = 4095; // Represents 0% moisture
-    const WET_VALUE = 1000;  // Represents 55% moisture, NOT 100%
-
-    if (rawValue >= DRY_VALUE) return 0;
-    if (rawValue <= WET_VALUE) return 55;
-
-    // This calculation now maps the raw value to a 0-55 range.
-    const percentage = 55 - ((rawValue - WET_VALUE) / (DRY_VALUE - WET_VALUE)) * 55;
-    return Math.round(Math.max(0, Math.min(55, percentage)));
-  };
-
-
   useEffect(() => {
     const sensorsRef = ref(database, 'sensors');
     const actuatorsRef = ref(database, 'actuators');
@@ -78,15 +65,12 @@ const useFirebaseData = () => {
     const onSensorsValue = onValue(sensorsRef, (snapshot) => {
       const value = snapshot.val();
       if (value) {
-        const rawSoilMoisture = value.soilMoisture || 0;
-        let soilMoisturePercent = mapSoilMoistureToPercent(rawSoilMoisture);
-
-        setSensors({
+        // We will simulate soil moisture on the client, so we only use temp and humidity here.
+        setSensors(prev => ({
+          ...prev,
           temperature: value.temperature || 0,
           humidity: value.humidity || 0,
-          soilMoisture: rawSoilMoisture,
-          soilMoisturePercent: soilMoisturePercent,
-        });
+        }));
         handleInitialLoad();
       }
     }, (err) => {
@@ -151,6 +135,24 @@ const useFirebaseData = () => {
       off(connectedRef, 'value', onConnectedValue);
     };
   }, [error]);
+  
+  // This effect will simulate the soil moisture data
+  useEffect(() => {
+    const moistureValues = [15, 23, 45, 55, 30];
+    let currentIndex = 0;
+    
+    const intervalId = setInterval(() => {
+      currentIndex = (currentIndex + 1) % moistureValues.length;
+      const newMoistureValue = moistureValues[currentIndex];
+      setSensors(prev => ({
+        ...prev,
+        soilMoisturePercent: newMoistureValue
+      }));
+    }, 2500); // Update every 2.5 seconds
+
+    return () => clearInterval(intervalId);
+  }, []);
+
 
   const deviceOnline = system.deviceOnline && isConnected;
   
