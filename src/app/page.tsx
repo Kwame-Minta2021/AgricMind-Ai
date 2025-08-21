@@ -66,11 +66,16 @@ const useFirebaseData = () => {
     const onSensorsValue = onValue(sensorsRef, (snapshot) => {
       const value = snapshot.val();
       if (value) {
+        let soilMoisturePercent = value.soilMoisturePercent || 0;
+        if (soilMoisturePercent > 70) {
+          soilMoisturePercent = 70;
+        }
+
         setSensors({
           temperature: value.temperature || 0,
           humidity: value.humidity || 0,
           soilMoisture: value.soilMoisture || 0,
-          soilMoisturePercent: value.soilMoisturePercent || 0,
+          soilMoisturePercent: soilMoisturePercent,
         });
         handleInitialLoad();
       }
