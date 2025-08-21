@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { ref, onValue, off } from "firebase/database";
+import { ref, onValue, off, set } from "firebase/database";
 import { database } from '@/lib/firebase';
 import { Thermometer, Droplets, Waves, Lightbulb, CloudRain, Wifi, WifiOff } from 'lucide-react';
 
@@ -57,13 +57,14 @@ const useFirebaseData = () => {
 
   const mapSoilMoistureToPercent = (rawValue: number) => {
     const DRY_VALUE = 4095; // Represents 0% moisture
-    const WET_VALUE = 1000;  // Represents 100% moisture
+    const WET_VALUE = 1000;  // Represents 55% moisture, NOT 100%
 
     if (rawValue >= DRY_VALUE) return 0;
-    if (rawValue <= WET_VALUE) return 100;
+    if (rawValue <= WET_VALUE) return 55;
 
-    const percentage = 100 - ((rawValue - WET_VALUE) / (DRY_VALUE - WET_VALUE)) * 100;
-    return Math.round(Math.max(0, Math.min(100, percentage)));
+    // This calculation now maps the raw value to a 0-55 range.
+    const percentage = 55 - ((rawValue - WET_VALUE) / (DRY_VALUE - WET_VALUE)) * 55;
+    return Math.round(Math.max(0, Math.min(55, percentage)));
   };
 
 
@@ -79,11 +80,6 @@ const useFirebaseData = () => {
       if (value) {
         const rawSoilMoisture = value.soilMoisture || 0;
         let soilMoisturePercent = mapSoilMoistureToPercent(rawSoilMoisture);
-
-        // Clamp the soil moisture to a maximum of 70%
-        if (soilMoisturePercent > 70) {
-          soilMoisturePercent = 70;
-        }
 
         setSensors({
           temperature: value.temperature || 0,
@@ -257,3 +253,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
