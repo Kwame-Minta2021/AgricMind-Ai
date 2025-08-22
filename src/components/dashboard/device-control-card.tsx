@@ -24,8 +24,12 @@ export function DeviceControlCard({ title, icon: Icon, isChecked, isLoading }: D
 
     try {
         if (isBulb) {
+            // Per firmware, set remote control to true, then send command
+            await set(ref(database, 'controls/remoteBulbControl'), true);
             await set(ref(database, 'controls/manualBulbCommand'), checked);
         } else if (isPump) {
+            // Per firmware, set remote control to true, then send command
+            await set(ref(database, 'controls/remotePumpControl'), true);
             await set(ref(database, 'controls/manualPumpCommand'), checked);
         }
     } catch (error) {

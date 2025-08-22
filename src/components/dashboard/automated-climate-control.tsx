@@ -32,8 +32,9 @@ export function AutomatedClimateControl({ currentBulbStatus, onNewInsight, curre
       
       onNewInsight(`AI Climate Control: ${result.reason}`);
       
-      // The AI now writes to the manual command path to control the bulb
+      // AI must also set remote control to true before sending command
       if (result.newBulbStatus !== currentBulbStatus) {
+        await set(ref(database, 'controls/remoteBulbControl'), true);
         await set(ref(database, 'controls/manualBulbCommand'), result.newBulbStatus);
       }
       
